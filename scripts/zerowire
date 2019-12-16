@@ -1,0 +1,5 @@
+#!python
+
+import runpy
+
+runpy.run_module('zerowire')
