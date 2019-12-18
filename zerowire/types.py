@@ -1,4 +1,5 @@
 from typing import Union
-from ipaddress import IPv4Address, IPv6Address
+from ipaddress import IPv4Interface, IPv6Interface, IPv4Network, IPv6Network
 
-TAddress = Union[IPv4Address, IPv6Address]
+TAddress = Union[IPv4Interface, IPv6Interface]
+TNetwork = Union[IPv4Network, IPv6Network]

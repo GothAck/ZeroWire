@@ -4,9 +4,9 @@ from typing import (
     Dict,
 )
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
-from .config import Config
+from .config import IfaceConfig
 
 class ServiceInterface:
-    def __init__(self, config: Config):
+    def __init__(self, config: IfaceConfig):
         self.config = config
-        self.zeroconf = Zeroconf([config.my_address().compressed], True)  
+        self.zeroconf = Zeroconf([config.addr.compressed], True)

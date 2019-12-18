@@ -16,15 +16,16 @@ fd [prefix]:[subnet]:[addr]
 
 ## /etc/security/zerowire.conf
 ```yaml
-# Common to all your hosts:
-prefix: '10b24e7198' # See addressing above
-subnet: '0000' # See addressing above
-psk: 'S0/KiS28cN2ZH25/PWPzVCV5yG1q980sKW0oAYup4wM=' # Common secret, used to authenticate hosts and mdns services
+zero: # WireGuard interface wg-zero
+  # Common to all your hosts:
+  prefix: '10b24e7198' # See addressing above
+  subnet: '0000' # See addressing above
+  psk: 'S0/KiS28cN2ZH25/PWPzVCV5yG1q980sKW0oAYup4wM=' # Common secret, used to authenticate hosts and mdns services
 
-# Unique to each host
-addr: '8ad789f4c0dd16ea' # Address in your private IPv6 network
-privkey: 'MChrMqE3Aanb26K2q3k1sxA1Ls577wptpGnK8/NHxWY='
-pubkey: '4T7IpKzwFODBZZruvNXawH7+Sr0bU5kYAslQ1LyS+FE='
+  # Unique to each host
+  addr: '8ad789f4c0dd16ea' # Address in your private IPv6 network
+  privkey: 'MChrMqE3Aanb26K2q3k1sxA1Ls577wptpGnK8/NHxWY='
+  pubkey: '4T7IpKzwFODBZZruvNXawH7+Sr0bU5kYAslQ1LyS+FE='
 ```
 
 
@@ -35,6 +36,5 @@ Open an issue, even better, open a pull request!
 - Tidy things up.
 - Re-enable initial config file generator.
 - Ability to accept/deny new hosts somewhat like SSH.
-- Muiltiple configurations.
 - Services advertized privately over the tunnel (fs mounts, web services, etc.).
 - Local firewall config?

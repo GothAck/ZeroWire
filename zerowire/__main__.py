@@ -19,7 +19,7 @@ from typing import (
     NamedTuple,
     no_type_check,
 )
-from typing_extensions import TypedDict
+from dataclasses import dataclass
 from typeguard import check_type
 from enum import IntEnum
 import sys
@@ -38,9 +38,9 @@ import netifaces
 import yaml
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 
-from .config import Config, MACHINE_ID
-from .wgzero import WGInterface, IFACE, PORT
-from .wg import wg_proc
+from .config import Config, IfaceConfig, MACHINE_ID
+from .wgzero import WGInterface
+from .wg import wg_proc, WGProc
 
 FORMAT = '[%(levelname)s] %(message)s'
 
@@ -53,62 +53,68 @@ class LogLevels(IntEnum):
     info = logging.INFO
     debug = logging.DEBUG
 
-class Args(NamedTuple):
+@dataclass(frozen=True)
+class Args:
     config: TextIO
     help: bool
     version: bool
     level: LogLevels
 
-    @staticmethod
-    def new(config: str, help: bool, version: bool, level: str) -> Args:
-        return Args(
-            config=open(config),
-            help=help,
-            version=version,
-            level=LogLevels[level],
-        )
+    def __init__(self, config: str, help: bool, version: bool, level: str):
+        object.__setattr__(self, 'config', open(config))
+        object.__setattr__(self, 'help', help)
+        object.__setattr__(self, 'version', version)
+        object.__setattr__(self, 'level', LogLevels[level])
 
 
-@no_type_check
-def create_iface(config: Config):
+# @no_type_check
+def create_iface(name: str, config: Config) -> None:
     with IPDB() as ipdb:
-        if IFACE in ipdb.interfaces:
-            ipdb.interfaces[IFACE].remove().commit()
-
-        with ipdb.create(kind='wireguard', ifname=IFACE) as i:
-            i.add_ip(f'{config.my_address()}/{config.my_prefix().prefixlen}')
+        if name in ipdb.interfaces:
+            ipdb.interfaces[name].remove().commit()
+        with ipdb.create(kind='wireguard', ifname=name) as i:
+            addr = config[name].addr
+            i.add_ip(f'{addr}')
             i.up()
-            IFACE_index = i.index
 
 
 def main() -> None:
-    args: Args = Args.new(**{ key[2:]: value for key, value in docopt(__doc__).items()})
+    args: Args = Args(**{ key[2:]: value for key, value in docopt(__doc__).items()})
 
     logging.basicConfig(format=FORMAT, level=args.level)
     config: Config = Config.load(args.config)
-
     logger.debug('Config %s', config.__dict__)
 
-    logger.info('My Address %s, my prefix %s', config.my_address(), config.my_prefix())
+    interfaces: List[WGInterface] = []
 
-    IFACE_index = None
+    for wg_ifname in config:
+        wg_ifconfig = config[wg_ifname]
+        logger.info('My Address %s, my prefix %s', wg_ifconfig.addr, wg_ifconfig.prefix)
 
-    create_iface(config)
+        # IFACE_index = None
 
-    # wg.set_interface(IFACE, config.privkey, PORT, replace_peers=True)
-    wg_proc(['set', IFACE, 'listen-port', str(PORT), 'private-key', '/dev/stdin'], input=config.privkey)
+        create_iface(wg_ifname, config)
 
-    interfaces = [
-        WGInterface(name, config)
-        for name in netifaces.interfaces()
-        if name != 'lo' and not name.startswith('wg')
-    ]
+        # wg.set_interface(IFACE, config.privkey, PORT, replace_peers=True)
+        port = wg_ifconfig.port
+        (WGProc('set', wg_ifname)
+            .args(
+                ['listen-port', str(port)] if isinstance(port, int) else [],
+                'private-key', '/dev/stdin'
+            )
+            .input(wg_ifconfig.privkey)
+            .run())
+        interfaces.extend(
+            WGInterface(name, config, wg_ifname)
+            for name in netifaces.interfaces()
+            if name != 'lo' and not name.startswith('wg')
+        )
 
     try:
         input("Press enter to exit...\n\n")
     finally:
-        for iface in interfaces:
-            iface.close()
+        for wgiface in interfaces:
+            wgiface.close()
 
 if __name__.endswith("__main__"):
     main()

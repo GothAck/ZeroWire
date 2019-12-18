@@ -15,19 +15,19 @@ import base64
 import netifaces
 import ipaddress
 from threading import Lock
-from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
+from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo, ServiceListener
 from pyroute2 import IPRoute
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 
-from .config import Config, MACHINE_ID, HOSTNAME
+from .config import Config, IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import wg_proc
 from .types import TAddress
 
 WG_TYPE = "_wireguard._udp.local."
 
 IFACE = 'wg-zero'
-PORT = 12345
+
 
 assert socket.AF_INET == netifaces.AF_INET
 assert socket.AF_INET6 == netifaces.AF_INET6
@@ -37,15 +37,21 @@ class WGServiceInfo(ServiceInfo):
     auth: bytes
 
     @classmethod
-    def new(Cls, machineid: str, addresses: List[bytes], hostname: str, config: Config) -> WGServiceInfo:
+    def new(Cls, machineid: str, addresses: List[bytes], hostname: str, config: IfaceConfig) -> WGServiceInfo:
         salt = base64.b64encode(os.urandom(32))
 
         dnshost = f'{machineid}.{WG_TYPE}'
-        addr = config.my_address().compressed.encode('utf-8')
+        addr = config.addr.ip.compressed.encode('utf-8')
+        port = config.port
         hostnameenc = hostname.encode('utf-8')
         pubkey = config.pubkey.encode('utf-8')
         psk = config.psk.encode('utf-8')
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(dnshost.encode('utf-8'))
+        digest.update(str(port).encode('utf-8'))
+        # print(addresses)
+        # for address in addresses:
+        #     digest.update(address)
         digest.update(addr)
         digest.update(hostnameenc)
         digest.update(pubkey)
@@ -55,12 +61,12 @@ class WGServiceInfo(ServiceInfo):
         self = Cls(
             WG_TYPE,
             dnshost,
-            port=config.port or PORT,
+            port=port,
             addresses=addresses,
             properties={
-                'addr': config.my_address().compressed.encode('utf-8'),
+                'addr': addr,
                 'hostname': hostnameenc,
-                'pubkey': config.pubkey,
+                'pubkey': pubkey,
                 'salt': salt,
                 'auth': auth,
             }
@@ -72,13 +78,19 @@ class WGServiceInfo(ServiceInfo):
 
     @staticmethod
     def authenticate(info: ServiceInfo, psk: str) -> bool:
-        props: Dict[bytes, bytes] = info.properties # type: ignore
+        props: Dict[bytes, bytes] = info.properties
         addr = props.get(b'addr', b'')
         hostname = props.get(b'hostname', b'')
         pubkey = props.get(b'pubkey', b'')
         salt = props.get(b'salt', b'')
         auth = props.get(b'auth', b'')
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+
+        digest.update(info.name.encode('utf-8'))
+        digest.update(str(info.port).encode('utf-8'))
+        # print(info.addresses)
+        # for address in info.addresses:
+        #     digest.update(address)
         digest.update(addr)
         digest.update(hostname)
         digest.update(pubkey)
@@ -90,18 +102,20 @@ class WGServiceInfo(ServiceInfo):
 
 
 class WGInterface:
-    def __init__(self, name: str, config: Config):
-        self.name = name
-        self.ifindex: int = IPRoute().link_lookup(ifname=name)[0]
+    def __init__(self, ifname: str, config: Config, wg_ifname: str):
+        self.ifname = ifname
+        self.wg_ifname = wg_ifname
+        self.wg_ifconfig = config[wg_ifname]
+        self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
         self.config = config
-        self.listener = ServiceListener(self, config)
+        self.listener = WGServiceListener(self)
         self.addresses = self.get_addrs()
         self.zeroconf = Zeroconf([addr.compressed for addr in self.addresses])
         self.service: WGServiceInfo = WGServiceInfo.new(
             MACHINE_ID,
             addresses=[addr.packed for addr in self.addresses],
             hostname=HOSTNAME,
-            config=config,
+            config=self.wg_ifconfig,
         )
 
     def close(self) -> None:
@@ -109,7 +123,7 @@ class WGInterface:
             self._zeroconf.close()
 
     def get_addrs(self) -> List[Union[ipaddress.IPv6Address, ipaddress.IPv4Address]]:
-        addrs = netifaces.ifaddresses(self.name)
+        addrs = netifaces.ifaddresses(self.ifname)
         return [
             ipaddress.ip_address(addr['addr'].split('%', 2)[0])
             for type in (socket.AF_INET, socket.AF_INET6)
@@ -147,20 +161,23 @@ TRet = TypeVar('TRet')
 TFunc = TypeVar('TFunc', bound=Callable[..., TRet])
 
 
-class ServiceListener:
+class WGServiceListener(ServiceListener):
     peers: Dict[str, TAddress]
-    def __init__(self, iface: WGInterface, config: Config):
+    def __init__(self, iface: WGInterface):
         self.iface = iface
-        self.my_address = config.my_address()
-        self.my_prefix = config.my_prefix()
-        self.pubkey = config.pubkey
-        self.psk = config.psk
+        self.my_address = iface.wg_ifconfig.addr
+        self.my_prefix = iface.wg_ifconfig.prefix
+        self.pubkey = iface.wg_ifconfig.pubkey
+        self.psk = iface.wg_ifconfig.psk
         self.peers = {}
         self.lock = Lock()
 
     def remove_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
         with self.lock:
             print("Service %s removed" % (name,))
+
+    def update_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
+        pass
 
     def add_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
         with self.lock:
@@ -169,7 +186,7 @@ class ServiceListener:
             if not WGServiceInfo.authenticate(info, self.psk):
                 print('Failed to authenticate remote with psk hash')
                 return
-            props: Dict[bytes, bytes] = info.properties # type: ignore
+            props: Dict[bytes, bytes] = info.properties
             addrs: List[TAddress] = [ipaddress.ip_address(addr) for addr in info.addresses]
             _internal_addr = props.get(b'addr', b'').decode('utf-8')
             internal_addr: Optional[TAddress] = ipaddress.ip_address(_internal_addr) if _internal_addr else None
@@ -178,7 +195,7 @@ class ServiceListener:
                 print('Service does not have requisite properties')
                 return
             if internal_addr == self.my_address: return
-            if not ipaddress.ip_network(internal_addr).subnet_of(self.my_prefix): return
+            if not ipaddress.ip_network(internal_addr, False).subnet_of(self.my_prefix): return
             print(f'Found remote. name "{name}" pubkey "{pubkey}" addrs {addrs} port {info.port}')
             if pubkey in self.peers: return
             # if self.peers.get(pubkey, None) == : return
@@ -188,8 +205,7 @@ class ServiceListener:
                 if addr.is_link_local: continue
                 endpoint = f'[{addr.compressed}]' if addr.version == 6 else addr.compressed
                 endpoint = f'{endpoint}:{info.port}'
-                print(endpoint)
-                internal_addr_o = ipaddress.ip_address(addr)
+                internal_addr_o = ipaddress.ip_address(internal_addr)
                 wg_proc(
                     [
                         'set', IFACE,
