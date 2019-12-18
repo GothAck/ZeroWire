@@ -1,4 +1,4 @@
-name: Python application
+name: Python MyPy type checks
 
 on: [push]
 
