@@ -19,6 +19,7 @@ from typing import (
 from dataclasses import dataclass
 from enum import IntEnum
 import logging
+from time import sleep
 
 from docopt import docopt
 from pyroute2 import IPDB
@@ -94,9 +95,8 @@ def main() -> None:
             for name in netifaces.interfaces()
             if name != 'lo' and not name.startswith('wg')
         )
-
     try:
-        input("Press enter to exit...\n\n")
+        while True: sleep(60)
     finally:
         for wgiface in interfaces:
             wgiface.close()
