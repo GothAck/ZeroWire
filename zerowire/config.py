@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Type,
     List,
     Dict,
     Tuple,
@@ -11,23 +10,13 @@ from typing import (
     get_type_hints,
 )
 from dataclasses import dataclass
-from typing_extensions import TypedDict
 from typeguard import check_type
 import yaml
-import random
 import socket
-import subprocess
 import ipaddress
-from zeroconf import Zeroconf, ServiceInfo
-from .wg import wg_proc
 from .types import TAddress, TNetwork
 
-DEFAULT_CONF = '/etc/security/zerowire.conf'
-
-MACHINE_ID: str = ''
 HOSTNAME = socket.gethostname()
-
-
 with open('/etc/machine-id', 'rb') as f:
     MACHINE_ID = f.read().decode('utf-8').strip()
 

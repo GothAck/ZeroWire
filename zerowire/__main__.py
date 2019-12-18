@@ -14,33 +14,19 @@ Options:
 from __future__ import annotations
 from typing import (
     List,
-    Dict,
     TextIO,
-    NamedTuple,
-    no_type_check,
 )
 from dataclasses import dataclass
-from typeguard import check_type
 from enum import IntEnum
-import sys
-import os
-import socket
-import ipaddress
-from base64 import b64encode
 import logging
 
 from docopt import docopt
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from pyroute2 import IPDB
 import netifaces
-import yaml
-from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
 
-from .config import Config, IfaceConfig, MACHINE_ID
+from .config import Config
 from .wgzero import WGInterface
-from .wg import wg_proc, WGProc
+from .wg import WGProc
 
 FORMAT = '[%(levelname)s] %(message)s'
 
@@ -67,7 +53,6 @@ class Args:
         object.__setattr__(self, 'level', LogLevels[level])
 
 
-# @no_type_check
 def create_iface(name: str, config: Config) -> None:
     with IPDB() as ipdb:
         if name in ipdb.interfaces:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import (
-    Any,
     Callable,
     List,
     Dict,
@@ -8,7 +7,6 @@ from typing import (
     Optional,
     TypeVar,
 )
-import typing
 import os
 import socket
 import base64
@@ -25,9 +23,6 @@ from .wg import wg_proc
 from .types import TAddress
 
 WG_TYPE = "_wireguard._udp.local."
-
-IFACE = 'wg-zero'
-
 
 assert socket.AF_INET == netifaces.AF_INET
 assert socket.AF_INET6 == netifaces.AF_INET6
@@ -208,7 +203,7 @@ class WGServiceListener(ServiceListener):
                 internal_addr_o = ipaddress.ip_address(internal_addr)
                 wg_proc(
                     [
-                        'set', IFACE,
+                        'set', self.iface.wg_ifname,
                         'peer', pubkey,
                         'preshared-key', '/dev/stdin',
                         'endpoint', endpoint,
