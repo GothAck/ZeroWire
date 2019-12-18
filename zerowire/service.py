@@ -9,4 +9,4 @@ from .config import Config
 class ServiceInterface:
     def __init__(self, config: Config):
         self.config = config
-        self.zeroconf = Zeroconf(config.my_address().compressed, True)
+        self.zeroconf = Zeroconf([config.my_address().compressed], True)  
