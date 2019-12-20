@@ -10,11 +10,12 @@ from typing import (
     get_type_hints,
 )
 from dataclasses import dataclass
-from typeguard import check_type
-import yaml
+from abc import ABC, abstractmethod
 import socket
 import ipaddress
 import logging
+from typeguard import check_type
+import yaml
 from pyroute2 import IPDB
 from .types import TAddress, TNetwork
 from .wg import WGProc
@@ -25,27 +26,59 @@ HOSTNAME = socket.gethostname()
 with open('/etc/machine-id', 'rb') as f:
     MACHINE_ID = f.read().decode('utf-8').strip()
 
-@dataclass(frozen=True)
-class ServiceConfig:
+TFromDict = Dict[str, Any]
+
+class ConfigBase:
+    @classmethod
+    @abstractmethod
+    def from_dict(Cls, from_dict: TFromDict) -> ConfigBase:
+        pass
+
+
+@dataclass
+class ServiceConfig(ConfigBase):
     type: str
     name: str
     port: int
-    properties: Optional[Tuple[Tuple[str, str], ...]]
+    properties: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_dict(Cls, from_dict: TFromDict) -> ServiceConfig:
+        hints = get_type_hints(ServiceConfig)
+        for key, hint in hints.items():
+            value = from_dict.get(key)
+            check_type(f'ServiceConfig.{key}', value, hint)
+        return ServiceConfig(**from_dict)
 
 
-@dataclass(frozen=True)
-class IfaceConfig:
+@dataclass
+class IfaceConfig(ConfigBase):
     name: str
     addr: TAddress
     privkey: str
     pubkey: str
     psk: str
-    port: Optional[int]
+    port: Optional[int] = None
     services: Optional[List[ServiceConfig]] = None
+
+    @classmethod
+    def from_dict(Cls, from_dict: TFromDict) -> IfaceConfig:
+        hints = get_type_hints(IfaceConfig)
+        check_type('IfaceConfig.addr', from_dict['addr'], str)
+        from_dict['addr'] = ipaddress.ip_interface(from_dict['addr'])
+        if 'services' in from_dict:
+            services = from_dict['services']
+            if isinstance(services, list):
+                for i, service in enumerate(services):
+                    services[i] = ServiceConfig.from_dict(service)
+        for key, hint in hints.items():
+            value = from_dict.get(key)
+            check_type(f'IfaceConfig.{key}', value, hint)
+        return IfaceConfig(**from_dict)
 
     @property
     def prefix(self) -> TNetwork:
-        return ipaddress.ip_network(self.addr, False) # type: ignore
+        return self.addr.network
 
     def configure(self) -> None:
         # Recreate iface
@@ -63,32 +96,35 @@ class IfaceConfig:
             )
             .input(self.privkey)
             .run())
+        if self.port is None:
+            port = int(WGProc('show', self.name, 'dump').run().split('\t')[2])
+            logger.info('Dynamic port %d', port)
+            self.port = port
 
 
-@dataclass(init=False)
-class Config:
+@dataclass
+class Config(ConfigBase):
     configs: Dict[str, IfaceConfig]
-    def __init__(self, **kwargs: Dict[str, Any]):
-        self.configs = {}
-        for iface_name, iface_dict in kwargs.items():
-            hints = get_type_hints(IfaceConfig)
-            iface_dict['addr'] = ipaddress.ip_interface(iface_dict['addr'])
-            for key, value in iface_dict.items():
-                check_type(f'{iface_name}.{key}', value, hints[key])
-
-            iface_name = f'wg-{iface_name}'
-            iface_dict['name'] = iface_name
-            self.configs[iface_name] = IfaceConfig(**iface_dict)
 
     @classmethod
     def load(Cls, file: TextIO) -> Config:
         config = yaml.safe_load(file.read())
-        if isinstance(config, dict):
-            return Cls(**config)
-        return Cls()
+        return Cls.from_dict(config)
+
+    @classmethod
+    def from_dict(Cls, from_dict: TFromDict) -> Config:
+        configs = {}
+        for iface_name, iface_dict in from_dict.items():
+            iface_name = f'wg-{iface_name}'
+            iface_dict['name'] = iface_name
+            configs[iface_name] = IfaceConfig.from_dict(iface_dict)
+        return Cls(configs)
 
     def __getitem__(self, key: str) -> IfaceConfig:
         return self.configs[key]
 
     def __iter__(self) -> Iterator[str]:
         return self.configs.__iter__()
+
+    def __len__(self) -> int:
+        return self.configs.__len__()
