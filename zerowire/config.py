@@ -14,7 +14,12 @@ from typeguard import check_type
 import yaml
 import socket
 import ipaddress
+import logging
+from pyroute2 import IPDB
 from .types import TAddress, TNetwork
+from .wg import WGProc
+
+logger = logging.getLogger(__name__)
 
 HOSTNAME = socket.gethostname()
 with open('/etc/machine-id', 'rb') as f:
@@ -30,6 +35,7 @@ class ServiceConfig:
 
 @dataclass(frozen=True)
 class IfaceConfig:
+    name: str
     addr: TAddress
     privkey: str
     pubkey: str
@@ -40,6 +46,23 @@ class IfaceConfig:
     @property
     def prefix(self) -> TNetwork:
         return ipaddress.ip_network(self.addr, False) # type: ignore
+
+    def configure(self) -> None:
+        # Recreate iface
+        with IPDB() as ipdb:
+            if self.name in ipdb.interfaces:
+                ipdb.interfaces[self.name].remove().commit()
+            with ipdb.create(kind='wireguard', ifname=self.name) as i:
+                i.add_ip(f'{self.addr}')
+                i.up()
+
+        (WGProc('set', self.name)
+            .args(
+                [] if self.port is None else ['listen-port', str(self.port)],
+                'private-key', '/dev/stdin'
+            )
+            .input(self.privkey)
+            .run())
 
 
 @dataclass(init=False)
@@ -53,7 +76,9 @@ class Config:
             for key, value in iface_dict.items():
                 check_type(f'{iface_name}.{key}', value, hints[key])
 
-            self.configs[f'wg-{iface_name}'] = IfaceConfig(**iface_dict)
+            iface_name = f'wg-{iface_name}'
+            iface_dict['name'] = iface_name
+            self.configs[iface_name] = IfaceConfig(**iface_dict)
 
     @classmethod
     def load(Cls, file: TextIO) -> Config:

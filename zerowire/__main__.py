@@ -54,16 +54,6 @@ class Args:
         object.__setattr__(self, 'level', LogLevels[level])
 
 
-def create_iface(name: str, config: Config) -> None:
-    with IPDB() as ipdb:
-        if name in ipdb.interfaces:
-            ipdb.interfaces[name].remove().commit()
-        with ipdb.create(kind='wireguard', ifname=name) as i:
-            addr = config[name].addr
-            i.add_ip(f'{addr}')
-            i.up()
-
-
 def main() -> None:
     args: Args = Args(**{ key[2:]: value for key, value in docopt(__doc__).items()})
 
@@ -77,19 +67,8 @@ def main() -> None:
         wg_ifconfig = config[wg_ifname]
         logger.info('My Address %s, my prefix %s', wg_ifconfig.addr, wg_ifconfig.prefix)
 
-        # IFACE_index = None
+        wg_ifconfig.configure()
 
-        create_iface(wg_ifname, config)
-
-        # wg.set_interface(IFACE, config.privkey, PORT, replace_peers=True)
-        port = wg_ifconfig.port
-        (WGProc('set', wg_ifname)
-            .args(
-                ['listen-port', str(port)] if isinstance(port, int) else [],
-                'private-key', '/dev/stdin'
-            )
-            .input(wg_ifconfig.privkey)
-            .run())
         interfaces.extend(
             WGInterface(name, config, wg_ifname)
             for name in netifaces.interfaces()
