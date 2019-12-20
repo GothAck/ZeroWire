@@ -184,13 +184,14 @@ class WGServiceListener(ServiceListener):
             props: Dict[bytes, bytes] = info.properties
             addrs: List[TAddress] = [ipaddress.ip_address(addr) for addr in info.addresses]
             _internal_addr = props.get(b'addr', b'').decode('utf-8')
-            internal_addr: Optional[TAddress] = ipaddress.ip_address(_internal_addr) if _internal_addr else None
+            internal_addr: Optional[TAddress] = ipaddress.ip_interface(_internal_addr) if _internal_addr else None
             pubkey = props.get(b'pubkey', b'').decode('utf-8')
             if not internal_addr or not pubkey:
                 print('Service does not have requisite properties')
                 return
             if internal_addr == self.my_address: return
-            if not ipaddress.ip_network(internal_addr, False).subnet_of(self.my_prefix): return
+            if not internal_addr.network.subnet_of(self.my_prefix): # type: ignore
+                return
             print(f'Found remote. name "{name}" pubkey "{pubkey}" addrs {addrs} port {info.port}')
             if pubkey in self.peers: return
             # if self.peers.get(pubkey, None) == : return
@@ -200,7 +201,7 @@ class WGServiceListener(ServiceListener):
                 if addr.is_link_local: continue
                 endpoint = f'[{addr.compressed}]' if addr.version == 6 else addr.compressed
                 endpoint = f'{endpoint}:{info.port}'
-                internal_addr_o = ipaddress.ip_address(internal_addr)
+                internal_addr_o = internal_addr.ip
                 wg_proc(
                     [
                         'set', self.iface.wg_ifname,
