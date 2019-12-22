@@ -101,20 +101,15 @@ class WGServiceInfo(ServiceInfo):
         return res == auth
 
 
-
-class WGInterface:
-    def __init__(self, ifname: str, config: Config, wg_ifname: str, dns: SimpleDNSServer):
-        logging.info('Setting up WGInterface phys %s wg_if %s', ifname, wg_ifname)
+class WGZeroconf:
+    def __init__(self, ifname: str, wg_iface: WGInterface):
         self.ifname = ifname
-        self.wg_ifname = wg_ifname
-        self.dns = dns
-        self.wg_ifconfig = config[wg_ifname]
         self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
-        self.wg_ifindex: int = IPRoute().link_lookup(ifname=wg_ifname)[0]
-        self.config = config
-        self.listener = WGServiceListener(self)
+        self.wg_iface = wg_iface
         self.addresses = self.get_addrs()
         self.zeroconf = Zeroconf([addr.compressed for addr in self.addresses])
+        self.listener = WGServiceListener(self)
+        self.browser = ServiceBrowser(self.zeroconf, WG_TYPE, self.listener)
 
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
         digest.update(MACHINE_ID.encode('utf-8'))
@@ -124,13 +119,9 @@ class WGInterface:
             digest.finalize()[:16].hex(),
             addresses=[addr.packed for addr in self.addresses],
             hostname=HOSTNAME,
-            config=self.wg_ifconfig,
+            config=wg_iface.config,
         )
-        dns.add_to_resolved(self)
-
-    def close(self) -> None:
-        if getattr(self, '_zeroconf', None) is not None:
-            self._zeroconf.close()
+        self.zeroconf.register_service(self.service)
 
     def get_addrs(self) -> List[Union[ipaddress.IPv6Address, ipaddress.IPv4Address]]:
         addrs = netifaces.ifaddresses(self.ifname)
@@ -140,45 +131,38 @@ class WGInterface:
             for addr in addrs.get(type, [])
         ]
 
-    @property
-    def service(self) -> ServiceInfo:
-        val: Optional[ServiceInfo] = getattr(self, '_service', None)
-        if val is None: raise Exception('Service not initialized')
-        return val
-
-    @service.setter
-    def service(self, value: ServiceInfo) -> None:
-        if getattr(self, '_service', None):
-            if getattr(self, '_zeroconf', None):
-                pass
-                ## TODO: unregister service
-        self._service = value
-        if getattr(self, '_zeroconf', None):
-            self._zeroconf.register_service(value)
-
-    @property
-    def zeroconf(self) -> Zeroconf:
-        val: Optional[Zeroconf] = getattr(self, '_zeroconf', None)
-        if val is None: raise Exception('Service not initialized')
-        return val
-    @zeroconf.setter
-    def zeroconf(self, value: Zeroconf) -> None:
-        self._zeroconf = value
-        self._browser = ServiceBrowser(value, WG_TYPE, self.listener)
+    def close(self) -> None:
+        self.zeroconf.close()
 
 
-TRet = TypeVar('TRet')
-TFunc = TypeVar('TFunc', bound=Callable[..., TRet])
+class WGInterface:
+    def __init__(self, ifname: str, config: IfaceConfig, dns: SimpleDNSServer):
+        self.ifname = ifname
+        self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
+        self.dns = dns
+        self.config = config
+
+        self.zeroconfs = [
+            WGZeroconf(name, self)
+            for name in netifaces.interfaces()
+            if name != 'lo' and not name.startswith('wg')
+        ]
+
+        dns.add_to_resolved(self)
+
+    def close(self) -> None:
+        for wg_zero in self.zeroconfs:
+            wg_zero.close()
 
 
 class WGServiceListener(ServiceListener):
     peers: Dict[str, TAddress]
-    def __init__(self, iface: WGInterface):
-        self.iface = iface
-        self.my_address = iface.wg_ifconfig.addr
-        self.my_prefix = iface.wg_ifconfig.prefix
-        self.pubkey = iface.wg_ifconfig.pubkey
-        self.psk = iface.wg_ifconfig.psk
+    def __init__(self, wg_zero: WGZeroconf):
+        self.wg_zero = wg_zero
+        self.my_address = wg_zero.wg_iface.config.addr
+        self.my_prefix = wg_zero.wg_iface.config.prefix
+        self.pubkey = wg_zero.wg_iface.config.pubkey
+        self.psk = wg_zero.wg_iface.config.psk
         self.peers = {}
         self.lock = Lock()
 
@@ -221,7 +205,7 @@ class WGServiceListener(ServiceListener):
                 internal_addr_o = internal_addr.ip
                 wg_proc(
                     [
-                        'set', self.iface.wg_ifname,
+                        'set', self.wg_zero.wg_iface.ifname,
                         'peer', pubkey,
                         'preshared-key', '/dev/stdin',
                         'endpoint', endpoint,
@@ -238,6 +222,6 @@ class WGServiceListener(ServiceListener):
                 # self.iface.wg.set_peer(interface=IFACE, public_key=pubkey, endpoint=endpoint, allowedips=[internal_addr])
                 self.peers[pubkey] = addr
                 zw_hostname = hostname + '.zerowire.'
-                self.iface.dns.add_record(
+                self.wg_zero.wg_iface.dns.add_record(
                     zw_hostname,
                     f'{zw_hostname} AAAA {internal_addr_o.compressed}')

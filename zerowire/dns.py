@@ -84,10 +84,10 @@ class SimpleDNSServer(BaseDNSServer):
         return reply
 
     def add_to_resolved(self, iface: WGInterface) -> None:
-        logger.debug('ifindex %r', iface.wg_ifindex)
+        logger.debug('ifindex %r', iface.ifindex)
         bus = dbus.SystemBus()
         dbus_proxy = bus.get_object(
             'org.freedesktop.resolve1', '/org/freedesktop/resolve1')
         dbus_iface = dbus.Interface(dbus_proxy, 'org.freedesktop.resolve1.Manager')
-        dbus_iface.SetLinkDNS(iface.wg_ifindex, [(2, [int(b) for b in self.bind.packed])])
-        dbus_iface.SetLinkDomains(iface.wg_ifindex, [['zerowire.', True]])
+        dbus_iface.SetLinkDNS(iface.ifindex, [(2, [int(b) for b in self.bind.packed])])
+        dbus_iface.SetLinkDomains(iface.ifindex, [['zerowire.', True]])

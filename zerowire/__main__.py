@@ -42,11 +42,7 @@ def main() -> None:
 
         wg_ifconfig.configure()
         logger.info('Interfaces %r', netifaces.interfaces())
-        interfaces.extend(
-            WGInterface(name, config, wg_ifname, dns)
-            for name in netifaces.interfaces()
-            if name != 'lo' and not name.startswith('wg')
-        )
+        interfaces.append(WGInterface(wg_ifname, wg_ifconfig, dns))
     loop = asyncio.get_event_loop()
     transport, _ = loop.run_until_complete(dns.start())
     try:
