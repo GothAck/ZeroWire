@@ -115,8 +115,13 @@ class WGInterface:
         self.listener = WGServiceListener(self)
         self.addresses = self.get_addrs()
         self.zeroconf = Zeroconf([addr.compressed for addr in self.addresses])
+
+        digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+        digest.update(MACHINE_ID.encode('utf-8'))
+        digest.update(ifname.encode('utf-8'))
+
         self.service: WGServiceInfo = WGServiceInfo.new(
-            MACHINE_ID,
+            digest.finalize()[:16].hex(),
             addresses=[addr.packed for addr in self.addresses],
             hostname=HOSTNAME,
             config=self.wg_ifconfig,
