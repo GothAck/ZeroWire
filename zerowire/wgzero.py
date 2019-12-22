@@ -13,6 +13,8 @@ import base64
 import netifaces
 import ipaddress
 from threading import Lock
+import logging
+
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo, ServiceListener
 from pyroute2 import IPRoute
 from cryptography.hazmat.backends import default_backend
@@ -21,6 +23,9 @@ from cryptography.hazmat.primitives import hashes
 from .config import Config, IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import wg_proc
 from .types import TAddress
+from .dns import SimpleDNSServer
+
+logger = logging.getLogger(__name__)
 
 WG_TYPE = "_wireguard._udp.local."
 
@@ -36,6 +41,7 @@ class WGServiceInfo(ServiceInfo):
         salt = base64.b64encode(os.urandom(32))
 
         dnshost = f'{machineid}.{WG_TYPE}'
+        logger.debug('dnshost %s', dnshost)
         addr = config.addr.ip.compressed.encode('utf-8')
         port = config.port
         hostnameenc = hostname.encode('utf-8')
@@ -97,11 +103,14 @@ class WGServiceInfo(ServiceInfo):
 
 
 class WGInterface:
-    def __init__(self, ifname: str, config: Config, wg_ifname: str):
+    def __init__(self, ifname: str, config: Config, wg_ifname: str, dns: SimpleDNSServer):
+        logging.info('Setting up WGInterface phys %s wg_if %s', ifname, wg_ifname)
         self.ifname = ifname
         self.wg_ifname = wg_ifname
+        self.dns = dns
         self.wg_ifconfig = config[wg_ifname]
         self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
+        self.wg_ifindex: int = IPRoute().link_lookup(ifname=wg_ifname)[0]
         self.config = config
         self.listener = WGServiceListener(self)
         self.addresses = self.get_addrs()
@@ -112,6 +121,7 @@ class WGInterface:
             hostname=HOSTNAME,
             config=self.wg_ifconfig,
         )
+        dns.add_to_resolved(self)
 
     def close(self) -> None:
         if getattr(self, '_zeroconf', None) is not None:
@@ -177,6 +187,7 @@ class WGServiceListener(ServiceListener):
     def add_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
         with self.lock:
             info = zeroconf.get_service_info(type, name)
+            logger.debug('WGServiceListener add_service %s %s %r', type, name, info)
             if not info: return
             if not WGServiceInfo.authenticate(info, self.psk):
                 print('Failed to authenticate remote with psk hash')
@@ -186,6 +197,7 @@ class WGServiceListener(ServiceListener):
             _internal_addr = props.get(b'addr', b'').decode('utf-8')
             internal_addr: Optional[TAddress] = ipaddress.ip_interface(_internal_addr) if _internal_addr else None
             pubkey = props.get(b'pubkey', b'').decode('utf-8')
+            hostname = props.get(b'hostname', b'').decode('utf-8')
             if not internal_addr or not pubkey:
                 print('Service does not have requisite properties')
                 return
@@ -219,3 +231,7 @@ class WGServiceListener(ServiceListener):
 
                 # self.iface.wg.set_peer(interface=IFACE, public_key=pubkey, endpoint=endpoint, allowedips=[internal_addr])
                 self.peers[pubkey] = addr
+                zw_hostname = hostname + '.zw.'
+                self.iface.dns.add_record(
+                    zw_hostname,
+                    f'{zw_hostname} AAAA {internal_addr_o.compressed}')

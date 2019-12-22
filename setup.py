@@ -29,6 +29,8 @@ setup(name='ZeroWire',
         'pyroute2',
         'typeguard',
         'pyyaml',
-        'docopt'
+        'docopt',
+        'dnslib',
+        'dbus-python',
       ],
      )

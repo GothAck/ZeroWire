@@ -5,3 +5,5 @@ pyroute2
 typeguard
 pyyaml
 docopt
+dnslib
+dbus-python
