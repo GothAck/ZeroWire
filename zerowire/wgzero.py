@@ -237,7 +237,7 @@ class WGServiceListener(ServiceListener):
 
                 # self.iface.wg.set_peer(interface=IFACE, public_key=pubkey, endpoint=endpoint, allowedips=[internal_addr])
                 self.peers[pubkey] = addr
-                zw_hostname = hostname + '.zw.'
+                zw_hostname = hostname + '.zerowire.'
                 self.iface.dns.add_record(
                     zw_hostname,
                     f'{zw_hostname} AAAA {internal_addr_o.compressed}')

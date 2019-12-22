@@ -46,7 +46,7 @@ class SimpleDNSServer:
             'org.freedesktop.resolve1', '/org/freedesktop/resolve1')
         dbus_iface = dbus.Interface(dbus_proxy, 'org.freedesktop.resolve1.Manager')
         dbus_iface.SetLinkDNS(iface.wg_ifindex, [(2, [int(b) for b in self.bind.packed])])
-        dbus_iface.SetLinkDomains(iface.wg_ifindex, [['zw.', True]])
+        dbus_iface.SetLinkDomains(iface.wg_ifindex, [['zerowire.', True]])
 
 
 class DNSDatagramProtocol(asyncio.DatagramProtocol):
