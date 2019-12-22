@@ -1,30 +1,16 @@
 #!/usr/bin/env python3
-'''
-ZeroWire Zeroconf WireGuard
-
-Usage:
-  zerowire [options]
-
-Options:
-  -h --help                      Show this help.
-  --version                      Show version.
-  -c <config> --config=<config>  Set config location. [default: /etc/security/zerowire.conf].
-  -l <level> --level=<level>     Set logging level. [default: info].
-'''
 from __future__ import annotations
 from typing import (
     List,
     TextIO,
 )
-from dataclasses import dataclass
-from enum import IntEnum
 import logging
 from time import sleep
 
-from docopt import docopt
 from pyroute2 import IPDB
 import netifaces
 
+from .args import Args
 from .config import Config
 from .wgzero import WGInterface
 from .wg import WGProc
@@ -33,29 +19,8 @@ FORMAT = '[%(levelname)s] %(message)s'
 
 logger = logging.getLogger(__name__)
 
-class LogLevels(IntEnum):
-    critical = logging.CRITICAL
-    error = logging.ERROR
-    warning = logging.WARNING
-    info = logging.INFO
-    debug = logging.DEBUG
-
-@dataclass(frozen=True)
-class Args:
-    config: TextIO
-    help: bool
-    version: bool
-    level: LogLevels
-
-    def __init__(self, config: str, help: bool, version: bool, level: str):
-        object.__setattr__(self, 'config', open(config))
-        object.__setattr__(self, 'help', help)
-        object.__setattr__(self, 'version', version)
-        object.__setattr__(self, 'level', LogLevels[level])
-
-
 def main() -> None:
-    args: Args = Args(**{ key[2:]: value for key, value in docopt(__doc__).items()})
+    args = Args.from_docopt()
 
     logging.basicConfig(format=FORMAT, level=args.level)
     config: Config = Config.load(args.config)
