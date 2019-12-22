@@ -1,0 +1,13 @@
+[Unit]
+Description = ZeroWire Zeroconf WireGuard
+ConditionPathExists = /etc/security/zerowire.conf
+
+[Service]
+Type = simple
+StandardOutput = journal
+StandardError = journal
+ExecStart = /usr/bin/env zerowire -l debug
+
+[Install]
+WantedBy=multi-user.target
+Wants=network-online.target
