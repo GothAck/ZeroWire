@@ -229,7 +229,8 @@ class WGServiceListener(ServiceListener):
                         'allowed-ips',
                         ','.join([
                             internal_addr_o.compressed,
-                            self.my_prefix.broadcast_address.compressed,
+                            # Apparently we cannot add the same addr to multiple peers
+                            # self.my_prefix.broadcast_address.compressed,
                         ])
                     ],
                     input=self.psk)
