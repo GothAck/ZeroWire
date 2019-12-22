@@ -6,4 +6,4 @@ typeguard
 pyyaml
 docopt
 dnslib
-dbus-python
+dbus_python

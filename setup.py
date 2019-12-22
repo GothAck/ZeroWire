@@ -31,6 +31,6 @@ setup(name='ZeroWire',
         'pyyaml',
         'docopt',
         'dnslib',
-        'dbus-python',
+        'dbus_python',
       ],
      )
