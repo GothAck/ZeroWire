@@ -17,7 +17,7 @@ import logging
 from typeguard import check_type
 import yaml
 from pyroute2 import IPDB
-from .types import TAddress, TNetwork
+from .types import TIfaceAddress, TNetwork
 from .wg import WGProc
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class ServiceConfig(ConfigBase):
 @dataclass
 class IfaceConfig(ConfigBase):
     name: str
-    addr: TAddress
+    addr: TIfaceAddress
     privkey: str
     pubkey: str
     psk: str

@@ -22,7 +22,7 @@ from cryptography.hazmat.primitives import hashes
 
 from .config import Config, IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import wg_proc
-from .types import TAddress
+from .types import TIfaceAddress
 from .dns import SimpleDNSServer
 
 logger = logging.getLogger(__name__)
@@ -156,7 +156,7 @@ class WGInterface:
 
 
 class WGServiceListener(ServiceListener):
-    peers: Dict[str, TAddress]
+    peers: Dict[str, TIfaceAddress]
     def __init__(self, wg_zero: WGZeroconf):
         self.wg_zero = wg_zero
         self.my_address = wg_zero.wg_iface.config.addr
@@ -182,9 +182,9 @@ class WGServiceListener(ServiceListener):
                 print('Failed to authenticate remote with psk hash')
                 return
             props: Dict[bytes, bytes] = info.properties
-            addrs: List[TAddress] = [ipaddress.ip_address(addr) for addr in info.addresses]
+            addrs: List[TIfaceAddress] = [ipaddress.ip_address(addr) for addr in info.addresses]
             _internal_addr = props.get(b'addr', b'').decode('utf-8')
-            internal_addr: Optional[TAddress] = ipaddress.ip_interface(_internal_addr) if _internal_addr else None
+            internal_addr: Optional[TIfaceAddress] = ipaddress.ip_interface(_internal_addr) if _internal_addr else None
             pubkey = props.get(b'pubkey', b'').decode('utf-8')
             hostname = props.get(b'hostname', b'').decode('utf-8')
             if not internal_addr or not pubkey:
@@ -202,7 +202,6 @@ class WGServiceListener(ServiceListener):
                 if addr.is_link_local: continue
                 endpoint = f'[{addr.compressed}]' if addr.version == 6 else addr.compressed
                 endpoint = f'{endpoint}:{info.port}'
-                internal_addr_o = internal_addr.ip
                 wg_proc(
                     [
                         'set', self.wg_zero.wg_iface.ifname,
@@ -212,7 +211,7 @@ class WGServiceListener(ServiceListener):
                         'persistent-keepalive', '5',
                         'allowed-ips',
                         ','.join([
-                            internal_addr_o.compressed,
+                            internal_addr.ip.compressed,
                             # Apparently we cannot add the same addr to multiple peers
                             # self.my_prefix.broadcast_address.compressed,
                         ])
@@ -224,4 +223,4 @@ class WGServiceListener(ServiceListener):
                 zw_hostname = hostname + '.zerowire.'
                 self.wg_zero.wg_iface.dns.add_record(
                     zw_hostname,
-                    f'{zw_hostname} AAAA {internal_addr_o.compressed}')
+                    f'{zw_hostname} AAAA {internal_addr.ip.compressed}')
