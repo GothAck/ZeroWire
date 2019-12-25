@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives import hashes
 from .config import Config, IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import wg_proc
 from .types import TIfaceAddress
-from .dns import SimpleDNSServer
+from .dns import LocalDNSServer, InterfaceDNSServer
 
 logger = logging.getLogger(__name__)
 
@@ -136,11 +136,16 @@ class WGZeroconf:
 
 
 class WGInterface:
-    def __init__(self, ifname: str, config: IfaceConfig, dns: SimpleDNSServer):
+    def __init__(self, ifname: str, config: IfaceConfig, dns: LocalDNSServer):
         self.ifname = ifname
         self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
-        self.dns = dns
+        self.global_dns = dns
         self.config = config
+        self.dns = InterfaceDNSServer(HOSTNAME, self.config.addr)
+        if config.services:
+            for service in config.services:
+                self.dns.add_service(service)
+            logger.info('Services %r', self.dns.get_all_records())
 
         self.zeroconfs = [
             WGZeroconf(name, self)
@@ -149,6 +154,9 @@ class WGInterface:
         ]
 
         dns.add_to_resolved(self)
+
+    async def start(self) -> None:
+        await self.dns.start()
 
     def close(self) -> None:
         for wg_zero in self.zeroconfs:
@@ -218,9 +226,8 @@ class WGServiceListener(ServiceListener):
                     ],
                     input=self.psk)
 
-                # self.iface.wg.set_peer(interface=IFACE, public_key=pubkey, endpoint=endpoint, allowedips=[internal_addr])
                 self.peers[pubkey] = addr
                 zw_hostname = hostname + '.zerowire.'
-                self.wg_zero.wg_iface.dns.add_record(
+                self.wg_zero.wg_iface.global_dns.add_addr_record(
                     zw_hostname,
-                    f'{zw_hostname} AAAA {internal_addr.ip.compressed}')
+                    internal_addr.ip)

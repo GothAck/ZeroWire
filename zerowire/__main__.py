@@ -11,27 +11,28 @@ from time import sleep
 
 from pyroute2 import IPDB
 import netifaces
-
+import ipaddress
 import asyncio
 
 from .args import Args
-from .config import Config
+from .config import Config, HOSTNAME
 from .wgzero import WGInterface
 from .wg import WGProc
-from .dns import SimpleDNSServer
+from .dns import LocalDNSServer
 
 FORMAT = '[%(levelname)s] %(message)s'
 
 logger = logging.getLogger(__name__)
 
-def main() -> None:
+async def main() -> None:
     args = Args.from_docopt()
 
     logging.basicConfig(format=FORMAT, level=args.level)
     config: Config = Config.load(args.config)
     logger.debug('Config %s', config.__dict__)
 
-    dns = SimpleDNSServer('127.122.119.53', 53)
+    dns = LocalDNSServer(ipaddress.ip_address('127.122.119.53'), 53)
+    await dns.start()
 
     interfaces: List[WGInterface] = []
 
@@ -42,14 +43,15 @@ def main() -> None:
 
         wg_ifconfig.configure()
         logger.info('Interfaces %r', netifaces.interfaces())
-        interfaces.append(WGInterface(wg_ifname, wg_ifconfig, dns))
-    loop = asyncio.get_event_loop()
-    transport, _ = loop.run_until_complete(dns.start())
+        iface = WGInterface(wg_ifname, wg_ifconfig, dns)
+        await iface.start()
+        interfaces.append(iface)
     try:
-        loop.run_forever()
+        while True:
+            await asyncio.sleep(60)
     finally:
         for wgiface in interfaces:
             wgiface.close()
 
 if __name__.endswith("__main__"):
-    main()
+    asyncio.run(main())
