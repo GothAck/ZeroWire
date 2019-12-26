@@ -40,7 +40,7 @@ class ServiceConfig(ConfigBase):
     type: str
     name: str
     port: int
-    properties: Optional[Dict[str, str]] = None
+    properties: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_dict(Cls, from_dict: TFromDict) -> ServiceConfig:

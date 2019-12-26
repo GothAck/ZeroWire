@@ -262,12 +262,31 @@ class InterfaceDNSServer(BaseDNSServer):
     def add_service(self, service: ServiceConfig) -> None:
         type = DNSLabel(service.type)
         name = type.add(DNSLabel(service.name))
+        type_suffixed = self.hostname.add(type)
         name_suffixed = self.hostname.add(name)
         port = service.port
-        properties = service.properties
+        props_list = []
+        for key, value in (service.properties or {}).items():
+            prop = key
+            if isinstance(value, bool):
+                if not value: prop += '='
+            else:
+                prop += '=' + str(value)
+            if len(prop) > 255:
+                logger.error('Property too large to add to txt record %s', key)
+                continue
+            props_list.append(prop)
+
+        props = ''.join(
+            chr(len(prop)) + prop
+            for prop in props_list
+        )
+
         self.add_record(type, QTYPE.PTR, dnslib.PTR(name_suffixed))
-        self.add_record('_svc', QTYPE.PTR, dnslib.PTR(name_suffixed))
+        self.add_record('_services._dns-sd._udp', QTYPE.PTR, dnslib.PTR(type_suffixed))
         self.add_record(name, QTYPE.SRV, dnslib.SRV(0, 0, port, self.hostname))
+        self.add_record(name, QTYPE.TXT, dnslib.TXT(props))
+
 
     async def handle_query(self, request: DNSRecord, source: TSource) -> DNSRecord:
         if not self.network.supernet_of(ipaddress.ip_network(source[0])): # type: ignore
