@@ -7,6 +7,7 @@ import os
 import base64
 import ipaddress
 from threading import Lock
+from dataclasses import dataclass
 
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo, ServiceListener
 from pyroute2 import IPRoute
@@ -136,6 +137,8 @@ class WGZeroconf(ClassLogger):
 
 
 class WGInterface(ClassLogger):
+    peers: Dict[str, WGPeerInfo]
+
     def __init__(self, ifname: str, config: Config, dns: LocalDNSServer):
         self._setLoggerName(ifname)
         self.ifname = ifname
@@ -143,6 +146,7 @@ class WGInterface(ClassLogger):
         self.global_dns = dns
         self.config = config[ifname]
         self.dns = InterfaceDNSServer(HOSTNAME, self.config.addr)
+        self.peers = {}
         if self.config.services:
             for service in self.config.services:
                 self.dns.add_service(service)
@@ -167,16 +171,20 @@ class WGInterface(ClassLogger):
             wg_zero.close()
 
 
-class WGServiceListener(ServiceListener, ClassLogger):
-    peers: Dict[str, TIfaceAddress]
+@dataclass
+class WGPeerInfo:
+    pubkey: str
+    hostname: str
+    addr: TIfaceAddress
 
+
+class WGServiceListener(ServiceListener, ClassLogger):
     def __init__(self, wg_zero: WGZeroconf):
         self.wg_zero = wg_zero
         self.my_address = wg_zero.wg_iface.config.addr
         self.my_prefix = wg_zero.wg_iface.config.prefix
         self.pubkey = wg_zero.wg_iface.config.pubkey
         self.psk = wg_zero.wg_iface.config.psk
-        self.peers = {}
         self.lock = Lock()
         self._setLoggerName(self.wg_zero)
 
@@ -226,7 +234,7 @@ class WGServiceListener(ServiceListener, ClassLogger):
                 addrs,
                 info.port,
             )
-            if pubkey in self.peers:
+            if pubkey in self.wg_zero.wg_iface.peers:
                 return
             # if self.peers.get(pubkey, None) == : return
             # if pubkey in self.iface.wg.get_interface(IFACE).peers: return
@@ -256,8 +264,9 @@ class WGServiceListener(ServiceListener, ClassLogger):
                     .input(self.psk)
                     .run())
 
-                self.peers[pubkey] = addr
                 zw_hostname = hostname + '.zerowire.'
+                self.wg_zero.wg_iface.peers[pubkey] = WGPeerInfo(
+                    pubkey, zw_hostname, internal_addr)
                 self.wg_zero.wg_iface.global_dns.add_addr_record(
                     zw_hostname,
                     internal_addr.ip)
