@@ -300,11 +300,6 @@ class InterfaceDNSServer(BaseDNSServer):
         self.hostname = DNSLabel(f'{hostname}.zerowire.')
         self.network = bind.network
         self.add_record(
-            '_services._dns-sd._udp',
-            QTYPE.PTR,
-            dnslib.PTR(
-                self.hostname.add('_services._dns-sd._udp')))
-        self.add_record(
             'b._dns-sd._udp',
             QTYPE.PTR,
             dnslib.PTR(self.hostname))
