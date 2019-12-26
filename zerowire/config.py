@@ -104,7 +104,7 @@ class IfaceConfig(ConfigBase):
 
 @dataclass
 class Config(ConfigBase):
-    configs: Dict[str, IfaceConfig]
+    interfaces: Dict[str, IfaceConfig]
 
     @classmethod
     def load(Cls, file: TextIO) -> Config:
@@ -113,18 +113,18 @@ class Config(ConfigBase):
 
     @classmethod
     def from_dict(Cls, from_dict: TFromDict) -> Config:
-        configs = {}
-        for iface_name, iface_dict in from_dict.items():
+        interfaces = {}
+        for iface_name, iface_dict in from_dict.get('interfaces', {}).items():
             iface_name = f'wg-{iface_name}'
             iface_dict['name'] = iface_name
-            configs[iface_name] = IfaceConfig.from_dict(iface_dict)
-        return Cls(configs)
+            interfaces[iface_name] = IfaceConfig.from_dict(iface_dict)
+        return Cls(interfaces)
 
     def __getitem__(self, key: str) -> IfaceConfig:
-        return self.configs[key]
+        return self.interfaces[key]
 
     def __iter__(self) -> Iterator[str]:
-        return self.configs.__iter__()
+        return self.interfaces.__iter__()
 
     def __len__(self) -> int:
-        return self.configs.__len__()
+        return self.interfaces.__len__()
