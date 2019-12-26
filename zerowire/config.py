@@ -34,6 +34,19 @@ class ConfigBase:
 
 
 @dataclass
+class ServiceHandlerConfig(ConfigBase):
+    type: str
+    script: str
+
+    @classmethod
+    def from_dict(Cls, from_dict: TFromDict) -> ServiceHandlerConfig:
+        hints = get_type_hints(ServiceHandlerConfig)
+        for key, hint in hints.items():
+            value = from_dict.get(key)
+            check_type(f'ServiceHandlerConfig.{key}', value, hint)
+        return ServiceHandlerConfig(**from_dict)
+
+@dataclass
 class ServiceConfig(ConfigBase):
     type: str
     name: str
@@ -103,6 +116,7 @@ class IfaceConfig(ConfigBase, ClassLogger):
 @dataclass
 class Config(ConfigBase):
     interfaces: Dict[str, IfaceConfig]
+    service_handlers: Dict[str, ServiceHandlerConfig]
 
     @classmethod
     def load(Cls, file: TextIO) -> Config:
@@ -112,11 +126,14 @@ class Config(ConfigBase):
     @classmethod
     def from_dict(Cls, from_dict: TFromDict) -> Config:
         interfaces = {}
+        service_handlers = {}
         for iface_name, iface_dict in from_dict.get('interfaces', {}).items():
             iface_name = f'wg-{iface_name}'
             iface_dict['name'] = iface_name
             interfaces[iface_name] = IfaceConfig.from_dict(iface_dict)
-        return Cls(interfaces)
+        for svc_type, svc_dict in from_dict.get('service_handlers', {}).items():
+            service_handlers[svc_type] = ServiceHandlerConfig.from_dict(iface_dict)
+        return Cls(interfaces, service_handlers)
 
     def __getitem__(self, key: str) -> IfaceConfig:
         return self.interfaces[key]
