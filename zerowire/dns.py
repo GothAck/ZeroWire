@@ -79,6 +79,15 @@ async def dns_query(host: TAddress, port: int, query: DNSRecord) -> DNSRecord:
         transport.close()
 
 
+def dns_query_timeout(
+    host: TAddress,
+    port: int,
+    query: DNSRecord,
+    timeout: int = 500,
+) -> asyncio.Future[DNSRecord]:
+    return asyncio.wait_for(dns_query(host, port, query), timeout)
+
+
 class DNSServerProtocol(asyncio.DatagramProtocol, ClassLogger):
     transport: asyncio.DatagramTransport
 
@@ -233,14 +242,10 @@ class LocalDNSServer(BaseDNSServer):
                 if remote_records:
                     q = DNSRecord()
                     q.add_question(question)
-                    queries.append(asyncio.wait_for(
-                        dns_query(
-                            ipaddress.ip_address(repr(remote_records[0])),
-                            53,
-                            q,
-                        ),
-                        0.5
-                    ))
+                    queries.append(dns_query_timeout(
+                        ipaddress.ip_address(repr(remote_records[0])),
+                        53,
+                        q))
                 else:
                     nxdomain = True
                 continue
