@@ -19,6 +19,7 @@ from .wg import WGProc
 from .types import TAddress, TIfaceAddress
 from .dns import LocalDNSServer, InterfaceDNSServer
 from .classlogger import ClassLogger
+from .service import ServiceDiscovery
 
 
 WG_TYPE = "_wireguard._udp.local."
@@ -147,6 +148,7 @@ class WGInterface(ClassLogger):
         self.config = config[ifname]
         self.dns = InterfaceDNSServer(HOSTNAME, self.config.addr)
         self.peers = {}
+        self.services = ServiceDiscovery(self, config)
         if self.config.services:
             for service in self.config.services:
                 self.dns.add_service(service)
@@ -165,8 +167,10 @@ class WGInterface(ClassLogger):
 
     async def start(self) -> None:
         await self.dns.start()
+        self.services.start()
 
     def close(self) -> None:
+        self.services.stop()
         for wg_zero in self.zeroconfs:
             wg_zero.close()
 

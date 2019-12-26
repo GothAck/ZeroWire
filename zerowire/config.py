@@ -132,7 +132,10 @@ class Config(ConfigBase):
             iface_dict['name'] = iface_name
             interfaces[iface_name] = IfaceConfig.from_dict(iface_dict)
         for svc_type, svc_dict in from_dict.get('service_handlers', {}).items():
-            service_handlers[svc_type] = ServiceHandlerConfig.from_dict(iface_dict)
+            if not svc_type.endswith('.'):
+                svc_type += '.'
+            svc_dict['type'] = svc_type
+            service_handlers[svc_type] = ServiceHandlerConfig.from_dict(svc_dict)
         return Cls(interfaces, service_handlers)
 
     def __getitem__(self, key: str) -> IfaceConfig:
