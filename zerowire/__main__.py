@@ -41,7 +41,7 @@ async def main() -> None:
         )
 
         wg_ifconfig.configure()
-        iface = WGInterface(wg_ifname, wg_ifconfig, dns)
+        iface = WGInterface(wg_ifname, config, dns)
         await iface.start()
         interfaces.append(iface)
     try:

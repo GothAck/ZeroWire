@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import (
     List,
     Dict,
-    Union,
 )
 import os
 import base64
@@ -14,7 +13,7 @@ from pyroute2 import IPRoute
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 
-from .config import IfaceConfig, MACHINE_ID, HOSTNAME
+from .config import Config, IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import WGProc
 from .types import TAddress, TIfaceAddress
 from .dns import LocalDNSServer, InterfaceDNSServer
@@ -137,15 +136,15 @@ class WGZeroconf(ClassLogger):
 
 
 class WGInterface(ClassLogger):
-    def __init__(self, ifname: str, config: IfaceConfig, dns: LocalDNSServer):
+    def __init__(self, ifname: str, config: Config, dns: LocalDNSServer):
         self._setLoggerName(ifname)
         self.ifname = ifname
         self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
         self.global_dns = dns
-        self.config = config
+        self.config = config[ifname]
         self.dns = InterfaceDNSServer(HOSTNAME, self.config.addr)
-        if config.services:
-            for service in config.services:
+        if self.config.services:
+            for service in self.config.services:
                 self.dns.add_service(service)
             self.logger.info('Services %r', self.dns.get_all_records())
 
