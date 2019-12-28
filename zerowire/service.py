@@ -11,6 +11,7 @@ from typing import (
     Tuple,
     Union,
     TypeVar,
+    Awaitable,
     TYPE_CHECKING
 )
 
@@ -19,19 +20,22 @@ if TYPE_CHECKING:
 
 import logging
 import asyncio
-import subprocess
 from dataclasses import dataclass
 import json
 
 logger = logging.getLogger(__name__)
 
+TKey = TypeVar('TKey')
 TVar = TypeVar('TVar')
 
-async def async_pair(name: str, future: asyncio.Future[TVar]) -> Tuple[str, Union[TVar, Exception]]:
+async def async_pair(
+    key: TKey,
+    future: Awaitable[TVar],
+) -> Tuple[TKey, Union[TVar, Exception]]:
     try:
-        return (name, await future)
+        return (key, await future)
     except Exception as e:
-        return (name, e)
+        return (key, e)
 
 
 @dataclass
@@ -42,6 +46,9 @@ class ServiceData:
     port: int
     target: str
     properties: Dict[str, Any]
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
     @classmethod
     async def query_data(Cls, peer: WGPeerInfo, name: DNSLabel, type: DNSLabel) -> ServiceData:
@@ -77,13 +84,27 @@ class ServiceData:
         )
 
 
+async def wait_terminate_process(
+    process: asyncio.subprocess.Process,
+    timeout: int = 2,
+) -> Optional[int]:
+    for _ in range(3):
+        try:
+            await asyncio.wait_for(process.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            process.kill()
+        else:
+            break
+    return process.returncode
+
+
 class ServiceDiscovery:
     task: Optional[asyncio.Task[None]]
     def __init__(self, iface: WGInterface, config: Config):
         self.iface = iface
         self.config = config
         self.service_handlers = config.service_handlers
-        self.services: Dict[str, str] = {}
+        self.services: Dict[str, ServiceData] = {}
         self.loop = asyncio.get_event_loop()
         self.task = None
 
@@ -145,34 +166,56 @@ class ServiceDiscovery:
         }
 
 
+    async def discover_peer(self, peer: WGPeerInfo) -> None:
+        subprocesses: Dict[ServiceData, asyncio.subprocess.Process] = {}
+        try:
+            logger.info('Looking up services for peer %r', peer)
+
+            types = [
+                type
+                for type in await self.query_peer_service_types(peer)
+                if str(type) in self.service_handlers
+            ]
+            type_services = await self.query_peer_type_services(peer, types)
+            service_data = await self.query_service_data(peer, type_services)
+
+            for type, services in service_data.items():
+                typestr = str(type)
+                handler = self.service_handlers[typestr]
+                for service in services:
+                    if service.name in self.services: continue
+                    subprocesses[service] = await asyncio.create_subprocess_shell(
+                        handler.script,
+                        env={
+                            'ZW_SVC_TYPE': typestr[:-1],
+                            'ZW_SVC_NAME': service.name[:-1],
+                            'ZW_SVC_PORT': str(service.port),
+                            'ZW_SVC_TARGET': service.target[:-1],
+                            'ZW_SVC_PROPERTIES': json.dumps(service.properties),
+                        })
+
+
+        except Exception as e:
+            logger.exception(e)
+            return
+        all_results = asyncio.gather(*(
+            async_pair(key, wait_terminate_process(process))
+            for key, process in subprocesses.items()
+        ))
+        for service, returncode in all_results:
+            print(service.name)
+            if returncode is None or returncode != 0:
+                logger.error(
+                    'Subprocess for service %s failed with returncode %i',
+                    service.name,
+                    returncode)
+            else:
+                self.services[service.name] = service
+
     async def discover(self) -> None:
         while True:
-            for peer in self.iface.peers.values():
-                try:
-                    logger.info('Looking up services for peer %r', peer)
-
-                    types = [
-                        type
-                        for type in await self.query_peer_service_types(peer)
-                        if str(type) in self.service_handlers
-                    ]
-                    type_services = await self.query_peer_type_services(peer, types)
-                    service_data = await self.query_service_data(peer, type_services)
-
-                    for type, services in service_data.items():
-                        typestr = str(type)
-                        handler = self.service_handlers[typestr]
-                        for service in services:
-                            if service.name in self.services: continue
-                            subprocess.Popen(handler.script, shell=True, env={
-                                'ZW_SVC_TYPE': typestr[:-1],
-                                'ZW_SVC_NAME': service.name[:-1],
-                                'ZW_SVC_PORT': str(service.port),
-                                'ZW_SVC_TARGET': service.target[:-1],
-                                'ZW_SVC_PROPERTIES': json.dumps(service.properties),
-                            })
-                            self.services[service.name] = ''
-                except Exception as e:
-                    logger.exception(e)
-                    continue
+            await asyncio.gather(*(
+                self.discover_peer(peer)
+                for peer in self.iface.peers.values()
+            ))
             await asyncio.sleep(60)
