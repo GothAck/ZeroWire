@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from .config import ServiceConfig
-from .types import TAddress, TIfaceAddress
-
 from typing import (
     Tuple,
     List,
@@ -23,6 +20,8 @@ import dbus
 import dnslib
 from dnslib import DNSRecord, DNSLabel, QTYPE, RCODE, RD
 
+from .config import ServiceConfig
+from .types import TAddress, TIfaceAddress
 from .classlogger import ClassLogger
 
 if TYPE_CHECKING:

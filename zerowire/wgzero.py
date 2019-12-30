@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives import hashes
 
 from .config import Config, IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import WGProc
-from .types import TAddress, TIfaceAddress
+from .types import TAddress, TIfaceAddress, TNetwork
 from .dns import LocalDNSServer, InterfaceDNSServer
 from .classlogger import ClassLogger
 from .service import ServiceDiscovery
@@ -199,6 +199,13 @@ class WGPeer(ClassLogger):
 
 
 class WGServiceListener(ServiceListener, ClassLogger):
+    wg_zero: WGZeroconf
+    my_address: TIfaceAddress
+    my_prefix: TNetwork
+    pubkey: str
+    psk: str
+    lock: Lock
+
     def __init__(self, wg_zero: WGZeroconf):
         self.wg_zero = wg_zero
         self.my_address = wg_zero.wg_iface.config.addr
