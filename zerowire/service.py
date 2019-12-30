@@ -1,10 +1,9 @@
 from __future__ import annotations
-from typing import (
-    List,
-    Dict,
-)
-from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo
+
 from .config import IfaceConfig
+
+from zeroconf import Zeroconf
+
 
 class ServiceInterface:
     def __init__(self, config: IfaceConfig):

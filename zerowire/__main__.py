@@ -1,28 +1,25 @@
 #!/usr/bin/env python3
 from __future__ import annotations
+
+from .args import Args
+from .config import Config
+from .wgzero import WGInterface
+from .dns import LocalDNSServer
+
 from typing import (
     List,
-    TextIO,
 )
 
-import sys
 import logging
-from time import sleep
 
-from pyroute2 import IPDB
 import netifaces
 import ipaddress
 import asyncio
 
-from .args import Args
-from .config import Config, HOSTNAME
-from .wgzero import WGInterface
-from .wg import WGProc
-from .dns import LocalDNSServer
-
 FORMAT = '[%(levelname)s] %(message)s'
 
 logger = logging.getLogger(__name__)
+
 
 async def main() -> None:
     args = Args.from_docopt()
@@ -39,7 +36,11 @@ async def main() -> None:
     for wg_ifname in config:
         wg_ifconfig = config[wg_ifname]
         logger.info('Setting up %s', wg_ifname)
-        logger.info('My Address %s, my prefix %s', wg_ifconfig.addr, wg_ifconfig.prefix)
+        logger.info(
+            'My Address %s, my prefix %s',
+            wg_ifconfig.addr,
+            wg_ifconfig.prefix,
+        )
 
         wg_ifconfig.configure()
         logger.info('Interfaces %r', netifaces.interfaces())

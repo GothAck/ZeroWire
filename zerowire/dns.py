@@ -1,7 +1,10 @@
 from __future__ import annotations
+
+from .config import ServiceConfig
+from .types import TAddress, TIfaceAddress
+
 from typing import (
     Tuple,
-    Any,
     List,
     Dict,
     Optional,
@@ -13,19 +16,15 @@ from copy import deepcopy
 import asyncio
 import logging
 import ipaddress
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from abc import abstractmethod
 from collections import defaultdict
 
 import dbus
 import dnslib
-from dnslib import DNSRecord, DNSHeader, DNSLabel, QTYPE, RCODE, RD, RR
+from dnslib import DNSRecord, DNSLabel, QTYPE, RCODE, RD
 
 if TYPE_CHECKING:
     from .wgzero import WGInterface
-
-from .config import ServiceConfig
-from .types import TAddress, TIfaceAddress
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,11 @@ class DNSClientProtocol(asyncio.DatagramProtocol):
         cast(asyncio.DatagramTransport, transport).sendto(self.query.pack())
         self.transport = transport
 
-    def datagram_received(self, data: Union[bytes, str], src: Tuple[str, int]) -> None:
+    def datagram_received(
+        self,
+        data: Union[bytes, str],
+        src: Tuple[str, int],
+    ) -> None:
         try:
             self.result = DNSRecord.parse(data)
         except Exception as e:
@@ -84,10 +87,19 @@ class DNSServerProtocol(asyncio.DatagramProtocol):
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         self.transport = cast(asyncio.DatagramTransport, transport)
 
-    def datagram_received(self, data: Union[bytes, str], src: Tuple[str, int]) -> None:
-        asyncio.run_coroutine_threadsafe(self.handle_query(data, src), self.server.loop)
+    def datagram_received(
+        self,
+        data: Union[bytes, str],
+        src: Tuple[str, int],
+    ) -> None:
+        asyncio.run_coroutine_threadsafe(
+            self.handle_query(data, src), self.server.loop)
 
-    async def handle_query(self, data: Union[bytes, str], src: Tuple[str, int]) -> None:
+    async def handle_query(
+        self,
+        data: Union[bytes, str],
+        src: Tuple[str, int],
+    ) -> None:
         source = cast(TSource, (ipaddress.ip_address(src[0]), int))
         query = DNSRecord.parse(data)
         try:
@@ -111,7 +123,9 @@ class BaseDNSServer:
         self.loop = asyncio.get_event_loop()
         self.__records = defaultdict(lambda: defaultdict(list))
 
-    async def start(self) -> Tuple[asyncio.BaseTransport, asyncio.BaseProtocol]:
+    async def start(
+        self,
+    ) -> Tuple[asyncio.BaseTransport, asyncio.BaseProtocol]:
         return await self.loop.create_datagram_endpoint(
             lambda: DNSServerProtocol(self),
             local_addr=(self.bind.compressed, self.port))
@@ -136,7 +150,12 @@ class BaseDNSServer:
         return self.add_record(
             name, self.addr_to_qtype(addr), self.addr_to_qdata(addr))
 
-    def del_record(self, name: TStrOrLabel, type: Optional[QTYPE] = None, record: Optional[RD] = None) -> None:
+    def del_record(
+        self,
+        name: TStrOrLabel,
+        type: Optional[QTYPE] = None,
+        record: Optional[RD] = None,
+    ) -> None:
         name = name if isinstance(name, DNSLabel) else DNSLabel(name)
         records = self.__records[name]
         if record is None:
@@ -176,7 +195,11 @@ class BaseDNSServer:
             raise Exception('Invalid suffix')
 
     @abstractmethod
-    async def handle_query(self, request: DNSRecord, source: TSource) -> Optional[DNSRecord]:
+    async def handle_query(
+        self,
+        request: DNSRecord,
+        source: TSource,
+    ) -> Optional[DNSRecord]:
         pass
 
 
@@ -184,7 +207,11 @@ class LocalDNSServer(BaseDNSServer):
     def __init__(self, bind: TAddress, port: int):
         super().__init__(bind, port)
 
-    async def handle_query(self, request: DNSRecord, source: TSource) -> DNSRecord:
+    async def handle_query(
+        self,
+        request: DNSRecord,
+        source: TSource,
+    ) -> DNSRecord:
         reply = request.reply()
         queries: List[asyncio.Future[DNSRecord]] = []
 
@@ -203,7 +230,11 @@ class LocalDNSServer(BaseDNSServer):
                     q = DNSRecord()
                     q.add_question(question)
                     queries.append(asyncio.wait_for(
-                        dns_query(ipaddress.ip_address(repr(remote_records[0])), 53, q),
+                        dns_query(
+                            ipaddress.ip_address(repr(remote_records[0])),
+                            53,
+                            q,
+                        ),
                         0.5
                     ))
                 else:
@@ -222,7 +253,8 @@ class LocalDNSServer(BaseDNSServer):
         if queries:
             logger.debug('Awaiting gather')
             try:
-                answers = await asyncio.gather(*queries, return_exceptions=True)
+                answers = await asyncio.gather(
+                    *queries, return_exceptions=True)
             except Exception as e:
                 logger.error(e)
             else:
@@ -245,9 +277,12 @@ class LocalDNSServer(BaseDNSServer):
         bus = dbus.SystemBus()
         dbus_proxy = bus.get_object(
             'org.freedesktop.resolve1', '/org/freedesktop/resolve1')
-        dbus_iface = dbus.Interface(dbus_proxy, 'org.freedesktop.resolve1.Manager')
-        dbus_iface.SetLinkDNS(iface.ifindex, [(2, [int(b) for b in self.bind.packed])])
-        dbus_iface.SetLinkDomains(iface.ifindex, [['zerowire.', True]])
+        dbus_iface = dbus.Interface(
+            dbus_proxy, 'org.freedesktop.resolve1.Manager')
+        dbus_iface.SetLinkDNS(
+            iface.ifindex, [(2, [int(b) for b in self.bind.packed])])
+        dbus_iface.SetLinkDomains(
+            iface.ifindex, [['zerowire.', True]])
 
 
 class InterfaceDNSServer(BaseDNSServer):
@@ -255,9 +290,19 @@ class InterfaceDNSServer(BaseDNSServer):
         super().__init__(bind.ip, port)
         self.hostname = DNSLabel(f'{hostname}.zerowire.')
         self.network = bind.network
-        self.add_record('_services._dns-sd._udp', QTYPE.PTR, dnslib.PTR(self.hostname.add('_services._dns-sd._udp')))
-        self.add_record('b._dns-sd._udp', QTYPE.PTR, dnslib.PTR(self.hostname))
-        self.add_record('lb._dns-sd._udp', QTYPE.PTR, dnslib.PTR(self.hostname))
+        self.add_record(
+            '_services._dns-sd._udp',
+            QTYPE.PTR,
+            dnslib.PTR(
+                self.hostname.add('_services._dns-sd._udp')))
+        self.add_record(
+            'b._dns-sd._udp',
+            QTYPE.PTR,
+            dnslib.PTR(self.hostname))
+        self.add_record(
+            'lb._dns-sd._udp',
+            QTYPE.PTR,
+            dnslib.PTR(self.hostname))
 
     def add_service(self, service: ServiceConfig) -> None:
         type = DNSLabel(service.type)
@@ -269,7 +314,8 @@ class InterfaceDNSServer(BaseDNSServer):
         for key, value in (service.properties or {}).items():
             prop = key
             if isinstance(value, bool):
-                if not value: prop += '='
+                if not value:
+                    prop += '='
             else:
                 prop += '=' + str(value)
             if len(prop) > 255:
@@ -282,14 +328,29 @@ class InterfaceDNSServer(BaseDNSServer):
             for prop in props_list
         )
 
-        self.add_record(type, QTYPE.PTR, dnslib.PTR(name_suffixed))
-        self.add_record('_services._dns-sd._udp', QTYPE.PTR, dnslib.PTR(type_suffixed))
-        self.add_record(name, QTYPE.SRV, dnslib.SRV(0, 0, port, self.hostname))
-        self.add_record(name, QTYPE.TXT, dnslib.TXT(props))
+        self.add_record(
+            type,
+            QTYPE.PTR,
+            dnslib.PTR(name_suffixed))
+        self.add_record(
+            '_services._dns-sd._udp',
+            QTYPE.PTR,
+            dnslib.PTR(type_suffixed))
+        self.add_record(
+            name,
+            QTYPE.SRV,
+            dnslib.SRV(0, 0, port, self.hostname))
+        self.add_record(
+            name,
+            QTYPE.TXT,
+            dnslib.TXT(props))
 
-
-    async def handle_query(self, request: DNSRecord, source: TSource) -> DNSRecord:
-        if not self.network.supernet_of(ipaddress.ip_network(source[0])): # type: ignore
+    async def handle_query(
+        self,
+        request: DNSRecord,
+        source: TSource,
+    ) -> DNSRecord:
+        if source[0] not in self.network:
             return None
         reply = request.reply()
         gave_answers = False

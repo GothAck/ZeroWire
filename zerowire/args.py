@@ -12,7 +12,6 @@ Options:
 '''
 from __future__ import annotations
 from typing import (
-    List,
     TextIO,
 )
 import logging
@@ -27,6 +26,7 @@ class LogLevels(IntEnum):
     warning = logging.WARNING
     info = logging.INFO
     debug = logging.DEBUG
+
 
 @dataclass(frozen=True)
 class Args:

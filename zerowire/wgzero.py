@@ -1,11 +1,8 @@
 from __future__ import annotations
 from typing import (
-    Callable,
     List,
     Dict,
     Union,
-    Optional,
-    TypeVar,
 )
 import os
 import socket
@@ -20,7 +17,7 @@ from pyroute2 import IPRoute
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 
-from .config import Config, IfaceConfig, MACHINE_ID, HOSTNAME
+from .config import IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import wg_proc
 from .types import TIfaceAddress
 from .dns import LocalDNSServer, InterfaceDNSServer
@@ -32,12 +29,19 @@ WG_TYPE = "_wireguard._udp.local."
 assert socket.AF_INET == netifaces.AF_INET
 assert socket.AF_INET6 == netifaces.AF_INET6
 
+
 class WGServiceInfo(ServiceInfo):
     salt: bytes
     auth: bytes
 
     @classmethod
-    def new(Cls, machineid: str, addresses: List[bytes], hostname: str, config: IfaceConfig) -> WGServiceInfo:
+    def new(
+        Cls,
+        machineid: str,
+        addresses: List[bytes],
+        hostname: str,
+        config: IfaceConfig,
+    ) -> WGServiceInfo:
         salt = base64.b64encode(os.urandom(32))
 
         dnshost = f'{machineid}.{WG_TYPE}'
@@ -59,7 +63,7 @@ class WGServiceInfo(ServiceInfo):
         digest.update(salt)
         digest.update(psk)
         auth = base64.b64encode(digest.finalize())
-        self = Cls(
+        obj = Cls(
             WG_TYPE,
             dnshost,
             port=port,
@@ -73,9 +77,9 @@ class WGServiceInfo(ServiceInfo):
             }
         )
 
-        self.salt = salt
-        self.auth = auth
-        return self
+        obj.salt = salt
+        obj.auth = auth
+        return obj
 
     @staticmethod
     def authenticate(info: ServiceInfo, psk: str) -> bool:
@@ -123,7 +127,9 @@ class WGZeroconf:
         )
         self.zeroconf.register_service(self.service)
 
-    def get_addrs(self) -> List[Union[ipaddress.IPv6Address, ipaddress.IPv4Address]]:
+    def get_addrs(
+        self,
+    ) -> List[Union[ipaddress.IPv6Address, ipaddress.IPv4Address]]:
         addrs = netifaces.ifaddresses(self.ifname)
         return [
             ipaddress.ip_address(addr['addr'].split('%', 2)[0])
@@ -165,6 +171,7 @@ class WGInterface:
 
 class WGServiceListener(ServiceListener):
     peers: Dict[str, TIfaceAddress]
+
     def __init__(self, wg_zero: WGZeroconf):
         self.wg_zero = wg_zero
         self.my_address = wg_zero.wg_iface.config.addr
@@ -184,31 +191,49 @@ class WGServiceListener(ServiceListener):
     def add_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
         with self.lock:
             info = zeroconf.get_service_info(type, name)
-            logger.debug('WGServiceListener add_service %s %s %r', type, name, info)
-            if not info: return
+            logger.debug(
+                'WGServiceListener add_service %s %s %r', type, name, info)
+            if not info:
+                return
             if not WGServiceInfo.authenticate(info, self.psk):
                 print('Failed to authenticate remote with psk hash')
                 return
             props: Dict[bytes, bytes] = info.properties
-            addrs: List[TIfaceAddress] = [ipaddress.ip_address(addr) for addr in info.addresses]
+            addrs: List[TIfaceAddress] = [
+                ipaddress.ip_address(addr)
+                for addr in info.addresses
+            ]
             _internal_addr = props.get(b'addr', b'').decode('utf-8')
-            internal_addr: Optional[TIfaceAddress] = ipaddress.ip_interface(_internal_addr) if _internal_addr else None
+            internal_addr = None
+            if _internal_addr:
+                internal_addr = ipaddress.ip_network(_internal_addr)
             pubkey = props.get(b'pubkey', b'').decode('utf-8')
             hostname = props.get(b'hostname', b'').decode('utf-8')
             if not internal_addr or not pubkey:
                 print('Service does not have requisite properties')
                 return
-            if internal_addr == self.my_address: return
-            if not internal_addr.network.subnet_of(self.my_prefix): # type: ignore
+            if internal_addr == self.my_address:
                 return
-            print(f'Found remote. name "{name}" pubkey "{pubkey}" addrs {addrs} port {info.port}')
-            if pubkey in self.peers: return
+            if not internal_addr.network.subnet_of(self.my_prefix):
+                return
+            logger.info(
+                'Found remote. name "%s" pubkey "%s" addrs %s port %d',
+                name,
+                pubkey,
+                addrs,
+                info.port,
+            )
+            if pubkey in self.peers:
+                return
             # if self.peers.get(pubkey, None) == : return
             # if pubkey in self.iface.wg.get_interface(IFACE).peers: return
             for addr in addrs:
                 addr = ipaddress.ip_address(addr)
-                if addr.is_link_local: continue
-                endpoint = f'[{addr.compressed}]' if addr.version == 6 else addr.compressed
+                if addr.is_link_local:
+                    continue
+                endpoint = addr.compressed
+                if addr.version == 6:
+                    endpoint = f'[{endpoint}]'
                 endpoint = f'{endpoint}:{info.port}'
                 wg_proc(
                     [
@@ -220,7 +245,8 @@ class WGServiceListener(ServiceListener):
                         'allowed-ips',
                         ','.join([
                             internal_addr.ip.compressed,
-                            # Apparently we cannot add the same addr to multiple peers
+                            # Apparently we cannot add the same addr to
+                            # multiple peers
                             # self.my_prefix.broadcast_address.compressed,
                         ])
                     ],
