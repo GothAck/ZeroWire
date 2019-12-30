@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import (
     Any,
-    List,
     Dict,
+    List,
     Optional,
     TextIO,
     Iterator,
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from abc import abstractmethod
 import socket
 import ipaddress
+
 from typeguard import check_type
 import yaml
 from pyroute2 import IPDB
@@ -36,7 +37,8 @@ class ConfigBase:
 @dataclass
 class ServiceHandlerConfig(ConfigBase):
     type: str
-    script: str
+    start: str
+    stop: str
 
     @classmethod
     def from_dict(Cls, from_dict: TFromDict) -> ServiceHandlerConfig:
@@ -45,6 +47,7 @@ class ServiceHandlerConfig(ConfigBase):
             value = from_dict.get(key)
             check_type(f'ServiceHandlerConfig.{key}', value, hint)
         return ServiceHandlerConfig(**from_dict)
+
 
 @dataclass
 class ServiceConfig(ConfigBase):
@@ -131,11 +134,13 @@ class Config(ConfigBase):
             iface_name = f'wg-{iface_name}'
             iface_dict['name'] = iface_name
             interfaces[iface_name] = IfaceConfig.from_dict(iface_dict)
-        for svc_type, svc_dict in from_dict.get('service_handlers', {}).items():
+        orig_service_handlers = from_dict.get('service_handlers', {})
+        for svc_type, svc_dict in orig_service_handlers.items():
             if not svc_type.endswith('.'):
                 svc_type += '.'
             svc_dict['type'] = svc_type
-            service_handlers[svc_type] = ServiceHandlerConfig.from_dict(svc_dict)
+            service_handlers[svc_type] = \
+                ServiceHandlerConfig.from_dict(svc_dict)
         return Cls(interfaces, service_handlers)
 
     def __getitem__(self, key: str) -> IfaceConfig:

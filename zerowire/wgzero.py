@@ -7,7 +7,8 @@ import os
 import base64
 import ipaddress
 from threading import Lock
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo, ServiceListener
 from pyroute2 import IPRoute
@@ -20,6 +21,7 @@ from .types import TAddress, TIfaceAddress
 from .dns import LocalDNSServer, InterfaceDNSServer
 from .classlogger import ClassLogger
 from .service import ServiceDiscovery
+from .classlogger import ClassLogger
 
 
 WG_TYPE = "_wireguard._udp.local."
@@ -38,7 +40,6 @@ class WGServiceInfo(ServiceInfo, ClassLogger):
         config: IfaceConfig,
     ) -> WGServiceInfo:
         salt = base64.b64encode(os.urandom(32))
-
         dnshost = f'{machineid}.{WG_TYPE}'
         addr = config.addr.ip.compressed.encode('utf-8')
         port = config.port
@@ -108,6 +109,7 @@ class WGZeroconf(ClassLogger):
         self.wg_iface = wg_iface
         self.addresses = self.get_addrs()
         self.zeroconf = Zeroconf([addr.compressed for addr in self.addresses])
+        self.loop = asyncio.get_event_loop()
         self.listener = WGServiceListener(self)
         self.browser = ServiceBrowser(self.zeroconf, WG_TYPE, self.listener)
 
@@ -129,8 +131,12 @@ class WGZeroconf(ClassLogger):
     ) -> List[TAddress]:
         with IPRoute() as ip:
             return [
-                ipaddress.ip_address(addr.get_attr('IFA_ADDRESS'))
-                for addr in ip.get_addr(label=self.ifname)
+                ipaddr
+                for ipaddr in (
+                    ipaddress.ip_address(addr.get_attr('IFA_ADDRESS'))
+                    for addr in ip.get_addr(label=self.ifname)
+                )
+                if not ipaddr.is_link_local
             ]
 
     def close(self) -> None:
@@ -138,17 +144,18 @@ class WGZeroconf(ClassLogger):
 
 
 class WGInterface(ClassLogger):
-    peers: Dict[str, WGPeerInfo]
+    peers: Dict[str, WGPeer]
 
     def __init__(self, ifname: str, config: Config, dns: LocalDNSServer):
         self._setLoggerName(ifname)
+        self.loop = asyncio.get_event_loop()
         self.ifname = ifname
         self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
         self.global_dns = dns
+        self.global_config = config
         self.config = config[ifname]
         self.dns = InterfaceDNSServer(HOSTNAME, self.config.addr)
         self.peers = {}
-        self.services = ServiceDiscovery(self, config)
         if self.config.services:
             for service in self.config.services:
                 self.dns.add_service(service)
@@ -167,19 +174,28 @@ class WGInterface(ClassLogger):
 
     async def start(self) -> None:
         await self.dns.start()
-        self.services.start()
 
     def close(self) -> None:
-        self.services.stop()
         for wg_zero in self.zeroconfs:
             wg_zero.close()
 
 
 @dataclass
-class WGPeerInfo:
+class WGPeer(ClassLogger):
+    wg_iface: WGInterface
+    name: str
     pubkey: str
     hostname: str
-    addr: TIfaceAddress
+    ext_addr: List[TIfaceAddress]
+    int_addr: TIfaceAddress
+    services: ServiceDiscovery = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.services = ServiceDiscovery(self, self.wg_iface.global_config)
+        self._setLoggerName(self.name)
+
+    def start(self) -> None:
+        self.services.start()
 
 
 class WGServiceListener(ServiceListener, ClassLogger):
@@ -195,6 +211,12 @@ class WGServiceListener(ServiceListener, ClassLogger):
     def remove_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
         with self.lock:
             print("Service %s removed" % (name,))
+            peer = self.wg_zero.wg_iface.peers[name]
+            peer.services.stop()
+            del self.wg_zero.wg_iface.peers[name]
+            self.wg_zero.wg_iface.global_dns.del_addr_record(
+                peer.hostname,
+                peer.int_addr.ip)
 
     def update_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
         pass
@@ -242,6 +264,8 @@ class WGServiceListener(ServiceListener, ClassLogger):
                 return
             # if self.peers.get(pubkey, None) == : return
             # if pubkey in self.iface.wg.get_interface(IFACE).peers: return
+            if not addrs:
+                return
             for addr in addrs:
                 addr = ipaddress.ip_address(addr)
                 if addr.is_link_local:
@@ -268,9 +292,14 @@ class WGServiceListener(ServiceListener, ClassLogger):
                     .input(self.psk)
                     .run())
 
-                zw_hostname = hostname + '.zerowire.'
-                self.wg_zero.wg_iface.peers[pubkey] = WGPeerInfo(
-                    pubkey, zw_hostname, internal_addr)
-                self.wg_zero.wg_iface.global_dns.add_addr_record(
-                    zw_hostname,
-                    internal_addr.ip)
+            zw_hostname = hostname + '.zerowire.'
+            self.wg_zero.wg_iface.peers[name] = WGPeer(
+                self.wg_zero.wg_iface,
+                name,
+                pubkey,
+                zw_hostname,
+                addrs,
+                internal_addr)
+            self.wg_zero.wg_iface.global_dns.add_addr_record(
+                zw_hostname,
+                internal_addr.ip)

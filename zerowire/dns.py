@@ -163,6 +163,10 @@ class BaseDNSServer(ClassLogger):
         return self.add_record(
             name, self.addr_to_qtype(addr), self.addr_to_qdata(addr))
 
+    def del_addr_record(self, name: TStrOrLabel, addr: TAddress) -> None:
+        self.del_record(
+            name, self.addr_to_qtype(addr), self.addr_to_qdata(addr))
+
     def del_record(
         self,
         name: TStrOrLabel,

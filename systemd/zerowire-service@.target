@@ -1,0 +1,5 @@
+[Unit]
+Description = ZeroWire service %i online
+Requires = zerowire.service
+AllowIsolate = no
+After = network-online.target
