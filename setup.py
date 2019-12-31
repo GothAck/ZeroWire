@@ -24,7 +24,6 @@ setup(name='ZeroWire',
       scripts=['scripts/zerowire'],
       requires=[
         'typing_extensions',
-        'netifaces',
         'zeroconf',
         'pyroute2',
         'typeguard',

@@ -1,5 +1,4 @@
 typing_extensions
-netifaces
 zeroconf
 pyroute2
 typeguard

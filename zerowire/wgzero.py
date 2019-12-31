@@ -2,12 +2,9 @@ from __future__ import annotations
 from typing import (
     List,
     Dict,
-    Union,
 )
 import os
-import socket
 import base64
-import netifaces
 import ipaddress
 from threading import Lock
 import logging
@@ -19,15 +16,12 @@ from cryptography.hazmat.primitives import hashes
 
 from .config import IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import wg_proc
-from .types import TIfaceAddress
+from .types import TAddress, TIfaceAddress
 from .dns import LocalDNSServer, InterfaceDNSServer
 
 logger = logging.getLogger(__name__)
 
 WG_TYPE = "_wireguard._udp.local."
-
-assert socket.AF_INET == netifaces.AF_INET
-assert socket.AF_INET6 == netifaces.AF_INET6
 
 
 class WGServiceInfo(ServiceInfo):
@@ -129,13 +123,12 @@ class WGZeroconf:
 
     def get_addrs(
         self,
-    ) -> List[Union[ipaddress.IPv6Address, ipaddress.IPv4Address]]:
-        addrs = netifaces.ifaddresses(self.ifname)
-        return [
-            ipaddress.ip_address(addr['addr'].split('%', 2)[0])
-            for type in (socket.AF_INET, socket.AF_INET6)
-            for addr in addrs.get(type, [])
-        ]
+    ) -> List[TAddress]:
+        with IPRoute() as ip:
+            return [
+                ipaddress.ip_address(addr.get_attr('IFA_ADDRESS'))
+                for addr in ip.get_addr(label=self.ifname)
+            ]
 
     def close(self) -> None:
         self.zeroconf.close()
@@ -155,7 +148,10 @@ class WGInterface:
 
         self.zeroconfs = [
             WGZeroconf(name, self)
-            for name in netifaces.interfaces()
+            for name in (
+                link.get_attr('IFLA_IFNAME')
+                for link in IPRoute().get_links()
+            )
             if name != 'lo' and not name.startswith('wg')
         ]
 
@@ -206,7 +202,7 @@ class WGServiceListener(ServiceListener):
             _internal_addr = props.get(b'addr', b'').decode('utf-8')
             internal_addr = None
             if _internal_addr:
-                internal_addr = ipaddress.ip_network(_internal_addr)
+                internal_addr = ipaddress.ip_interface(_internal_addr)
             pubkey = props.get(b'pubkey', b'').decode('utf-8')
             hostname = props.get(b'hostname', b'').decode('utf-8')
             if not internal_addr or not pubkey:

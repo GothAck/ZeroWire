@@ -12,7 +12,6 @@ from typing import (
 
 import logging
 
-import netifaces
 import ipaddress
 import asyncio
 
@@ -43,7 +42,6 @@ async def main() -> None:
         )
 
         wg_ifconfig.configure()
-        logger.info('Interfaces %r', netifaces.interfaces())
         iface = WGInterface(wg_ifname, wg_ifconfig, dns)
         await iface.start()
         interfaces.append(iface)
