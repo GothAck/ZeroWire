@@ -10,52 +10,56 @@ sys.path.append('../zerowire')
 from zerowire import config
 
 BASIC_CONFIG = """
-test:
-  addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
-  psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
-  privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
-  pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
+interfaces:
+  test:
+    addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
+    psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
+    privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
+    pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
 """
 
 PORT_CONFIG = """
-test:
-  addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
-  psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
-  privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
-  pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
-  port: 19920
+interfaces:
+  test:
+    addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
+    psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
+    privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
+    pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
+    port: 19920
 """
 
 SERVICES_CONFIG = """
-test:
-  addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
-  psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
-  privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
-  pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
-  port: 19920
-  services:
-  - type: rar
-    name: test
-    port: 123
-    properties:
-      yay: yolo
-      nay: oh
+interfaces:
+  test:
+    addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
+    psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
+    privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
+    pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
+    port: 19920
+    services:
+    - type: rar
+      name: test
+      port: 123
+      properties:
+        yay: yolo
+        nay: oh
 """
 
 SERVICES_CONFIG = """
-test:
-  addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
-  psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
-  privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
-  pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
-  port: 19920
-  services:
-  - type: rar
-    name: test
-    port: 123
-    properties:
-      yay: yolo
-      nay: oh
+interfaces:
+  test:
+    addr: fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64
+    psk: 1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=
+    privkey: aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=
+    pubkey: h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=
+    port: 19920
+    services:
+    - type: rar
+      name: test
+      port: 123
+      properties:
+        yay: yolo
+        nay: oh
 """
 
 class Test_Config(unittest.TestCase):
@@ -124,7 +128,7 @@ class Test_IfaceConfig_BASIC(unittest.TestCase):
         prefix = self.ifconfig.prefix
 
         assert isinstance(prefix, ipaddress.IPv6Network)
-        assert self.ifconfig.addr.network.subnet_of(prefix)
+        assert self.ifconfig.addr in prefix
 
     @patch('zerowire.wg.wg_proc')
     @patch('zerowire.config.IPDB')
@@ -188,7 +192,7 @@ class Test_IfaceConfig_PORT(unittest.TestCase):
         prefix = self.ifconfig.prefix
 
         assert isinstance(prefix, ipaddress.IPv6Network)
-        assert self.ifconfig.addr.network.subnet_of(prefix)
+        assert self.ifconfig.addr in prefix
 
     @patch('zerowire.wg.wg_proc')
     @patch('zerowire.config.IPDB')
