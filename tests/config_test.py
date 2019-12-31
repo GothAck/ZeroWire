@@ -62,6 +62,7 @@ interfaces:
         nay: oh
 """
 
+
 class Test_Config(unittest.TestCase):
     def test_load_config_BASIC(self) -> None:
         file = io.StringIO(BASIC_CONFIG)
@@ -74,7 +75,7 @@ class Test_Config(unittest.TestCase):
         iface = res['wg-test']
         assert isinstance(iface, config.IfaceConfig)
         assert iface.name == 'wg-test'
-        assert iface.addr.exploded == 'fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64'
+        assert iface.addr.compressed == 'fd01:203:405:607:809:a0b:d0e:f10/64'
         assert iface.psk == '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8='
         assert iface.privkey == 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc='
         assert iface.pubkey == 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI='
@@ -92,7 +93,7 @@ class Test_Config(unittest.TestCase):
         iface = res['wg-test']
         assert isinstance(iface, config.IfaceConfig)
         assert iface.name == 'wg-test'
-        assert iface.addr.exploded == 'fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64'
+        assert iface.addr.compressed == 'fd01:203:405:607:809:a0b:d0e:f10/64'
         assert iface.psk == '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8='
         assert iface.privkey == 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc='
         assert iface.pubkey == 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI='
@@ -110,7 +111,7 @@ class Test_Config(unittest.TestCase):
         iface = res['wg-test']
         assert isinstance(iface, config.IfaceConfig)
         assert iface.name == 'wg-test'
-        assert iface.addr.exploded == 'fd01:0203:0405:0607:0809:0a0b:0d0e:0f10/64'
+        assert iface.addr.compressed == 'fd01:203:405:607:809:a0b:d0e:f10/64'
         assert iface.psk == '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8='
         assert iface.privkey == 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc='
         assert iface.pubkey == 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI='
@@ -118,6 +119,7 @@ class Test_Config(unittest.TestCase):
         assert isinstance(iface.services, list)
         for service in iface.services:
             assert isinstance(service, config.ServiceConfig)
+
 
 class Test_IfaceConfig_BASIC(unittest.TestCase):
     def setUp(self) -> None:
@@ -150,7 +152,12 @@ class Test_IfaceConfig_BASIC(unittest.TestCase):
         ctxiface.remove.return_value.commit.assert_called_once_with()
 
         wg_proc.assert_has_calls([
-            call(['set', 'wg-test', 'private-key', '/dev/stdin'], input=self.ifconfig.privkey),
+            call([
+                'set',
+                'wg-test',
+                'private-key',
+                '/dev/stdin',
+            ], input=self.ifconfig.privkey),
             call(['show', 'wg-test', 'dump'], input=None),
         ])
 
@@ -176,7 +183,12 @@ class Test_IfaceConfig_BASIC(unittest.TestCase):
         ctxiface.remove.return_value.commit.assert_not_called()
 
         wg_proc.assert_has_calls([
-            call(['set', 'wg-test', 'private-key', '/dev/stdin'], input=self.ifconfig.privkey),
+            call([
+                'set',
+                'wg-test',
+                'private-key',
+                '/dev/stdin',
+            ], input=self.ifconfig.privkey),
             call(['show', 'wg-test', 'dump'], input=None),
         ])
 
@@ -214,7 +226,14 @@ class Test_IfaceConfig_PORT(unittest.TestCase):
         ctxiface.remove.return_value.commit.assert_called_once_with()
 
         wg_proc.assert_has_calls([
-            call(['set', 'wg-test', 'listen-port', '19920', 'private-key', '/dev/stdin'], input=self.ifconfig.privkey),
+            call([
+                'set',
+                'wg-test',
+                'listen-port',
+                '19920',
+                'private-key',
+                '/dev/stdin',
+            ], input=self.ifconfig.privkey),
         ])
 
         assert self.ifconfig.port == 19920
@@ -239,10 +258,18 @@ class Test_IfaceConfig_PORT(unittest.TestCase):
         ctxiface.remove.return_value.commit.assert_not_called()
 
         wg_proc.assert_has_calls([
-            call(['set', 'wg-test', 'listen-port', '19920', 'private-key', '/dev/stdin'], input=self.ifconfig.privkey),
+            call([
+                'set',
+                'wg-test',
+                'listen-port',
+                '19920',
+                'private-key',
+                '/dev/stdin'
+            ], input=self.ifconfig.privkey),
         ])
 
         assert self.ifconfig.port == 19920
+
 
 if __name__ == '__main__':
     unittest.main()

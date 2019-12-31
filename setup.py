@@ -13,16 +13,18 @@ from zerowire import (
 with open('README.md') as f:
     long_description = f.read()
 
-setup(name='ZeroWire',
-      version=__version__,
-      description=__description__,
-      long_description=long_description,
-      author=__author__,
-      author_email=__authoremail__,
-      url=__url__,
-      packages=['zerowire'],
-      scripts=['scripts/zerowire'],
-      requires=[
+setup(
+    name='ZeroWire',
+    version=__version__,
+    description=__description__,
+    long_description=long_description,
+    author=__author__,
+    author_email=__authoremail__,
+    url=__url__,
+    license=__license__,
+    packages=['zerowire'],
+    scripts=['scripts/zerowire'],
+    requires=[
         'typing_extensions',
         'zeroconf',
         'pyroute2',
@@ -31,5 +33,5 @@ setup(name='ZeroWire',
         'docopt',
         'dnslib',
         'dbus_python',
-      ],
-     )
+    ],
+)

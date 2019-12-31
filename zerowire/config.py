@@ -3,14 +3,13 @@ from typing import (
     Any,
     List,
     Dict,
-    Tuple,
     Optional,
     TextIO,
     Iterator,
     get_type_hints,
 )
 from dataclasses import dataclass
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import socket
 import ipaddress
 import logging
@@ -27,6 +26,7 @@ with open('/etc/machine-id', 'rb') as f:
     MACHINE_ID = f.read().decode('utf-8').strip()
 
 TFromDict = Dict[str, Any]
+
 
 class ConfigBase:
     @classmethod
