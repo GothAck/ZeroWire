@@ -2,7 +2,6 @@ version := $(shell ./setup.py --version)
 name := $(shell ./setup.py --name)
 
 src := $(shell find zerowire -name '*.py') setup.py $(wildcard scripts/*)
-dst := $(addprefix build/,$(src)) build/requirements.txt build/README.md
 whl := $(name)-$(version)-py3-none-any.whl
 deb := zerowire_$(version).deb
 exe := zerowire.pyz
@@ -13,8 +12,8 @@ wheel: $(whl)
 
 deb: $(deb)
 
-$(whl): $(dst)
-	cd build; python3 setup.py bdist_wheel -d ../
+$(whl): $(src)
+	python3 ./setup.py bdist_wheel -d .
 
 $(exe): build/pkg
 	cd build; python3 -m zipapp \
@@ -36,24 +35,8 @@ clean:
 	rm -rf build zerowire.pyz $(deb)
 
 build/pkg: $(whl)
-	chmod +x build/setup.py
 	mkdir -p $@
-	python3 -m pip install -r build/requirements.txt --target $@ --upgrade
+	python3 -m pip install -r requirements.txt --target $@ --upgrade
 	python3 -m pip install $(whl) --target $@ --upgrade
-
-build/requirements.txt: requirements.txt
-	grep -v dbus_python $< > $@
-
-build/README.md: README.md
-	cp $< $@
-
-build/%.py: %.py
-	@mkdir -p $(dir $@)
-	@echo "[strip-hints] $< $@"
-	@strip-hints $< > $@
-
-build/scripts/%: scripts/%
-	mkdir -p build/scripts
-	cp $< $@
 
 .PHONY: install build clean deb
