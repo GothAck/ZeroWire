@@ -1,6 +1,4 @@
 '''
-ZeroWire Zeroconf WireGuard
-
 Usage:
   zerowire [options]
 
@@ -18,6 +16,10 @@ import logging
 from enum import IntEnum
 from dataclasses import dataclass
 from docopt import docopt
+from . import __version__
+
+VERSION = f'ZeroWire Zeroconf WireGuard v{__version__}'
+__doc__ = f'{VERSION}\n{__doc__}'
 
 
 class LogLevels(IntEnum):
@@ -46,5 +48,5 @@ class Args:
         return Cls(**{
             key[2:]: value
             for key, value
-            in docopt(__doc__).items()
+            in docopt(__doc__, version=VERSION).items()
         })
