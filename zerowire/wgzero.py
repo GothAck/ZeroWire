@@ -15,7 +15,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 
 from .config import IfaceConfig, MACHINE_ID, HOSTNAME
-from .wg import wg_proc
+from .wg import WGProc
 from .types import TAddress, TIfaceAddress
 from .dns import LocalDNSServer, InterfaceDNSServer
 
@@ -231,9 +231,9 @@ class WGServiceListener(ServiceListener):
                 if addr.version == 6:
                     endpoint = f'[{endpoint}]'
                 endpoint = f'{endpoint}:{info.port}'
-                wg_proc(
-                    [
-                        'set', self.wg_zero.wg_iface.ifname,
+
+                (WGProc('set', self.wg_zero.wg_iface.ifname)
+                    .args([
                         'peer', pubkey,
                         'preshared-key', '/dev/stdin',
                         'endpoint', endpoint,
@@ -245,8 +245,9 @@ class WGServiceListener(ServiceListener):
                             # multiple peers
                             # self.my_prefix.broadcast_address.compressed,
                         ])
-                    ],
-                    input=self.psk)
+                    ])
+                    .input(self.psk)
+                    .run())
 
                 self.peers[pubkey] = addr
                 zw_hostname = hostname + '.zerowire.'
