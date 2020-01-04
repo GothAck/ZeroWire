@@ -26,6 +26,7 @@ $(deb): $(exe)
 	mkdir -p build/zerowire_$(version)/usr/local/bin
 	mkdir -p build/zerowire_$(version)/lib/systemd/system
 	mkdir -p build/zerowire_$(version)/DEBIAN
+	cp -r debian/* build/zerowire_$(version)/DEBIAN
 	cp zerowire.pyz build/zerowire_$(version)/usr/local/bin/zerowire
 	cp -r systemd/* build/zerowire_$(version)/lib/systemd/system
 	./debianize.py > build/zerowire_$(version)/DEBIAN/control

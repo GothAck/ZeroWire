@@ -1,0 +1,10 @@
+#!/bin/sh
+
+action="$1"
+version="$2"
+
+case "$action" in
+  configure)
+    systemctl daemon-reload || true
+  ;;
+esac
