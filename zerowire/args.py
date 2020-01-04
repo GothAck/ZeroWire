@@ -37,16 +37,12 @@ class Args:
     version: bool
     level: LogLevels
 
-    def __init__(self, config: str, help: bool, version: bool, level: str):
-        object.__setattr__(self, 'config', open(config))
-        object.__setattr__(self, 'help', help)
-        object.__setattr__(self, 'version', version)
-        object.__setattr__(self, 'level', LogLevels[level])
-
     @classmethod
     def from_docopt(Cls) -> Args:
-        return Cls(**{
-            key[2:]: value
-            for key, value
-            in docopt(__doc__, version=VERSION).items()
-        })
+        args = docopt(__doc__, version=VERSION)
+        return Cls(
+            open(args['--config']),
+            args['--help'],
+            args['--version'],
+            LogLevels[args['--level']],
+        )
