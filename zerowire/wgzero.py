@@ -190,9 +190,10 @@ class WGServiceListener(ServiceListener):
             logger.debug(
                 'WGServiceListener add_service %s %s %r', type, name, info)
             if not info:
+                logger.warn('Missing info')
                 return
             if not WGServiceInfo.authenticate(info, self.psk):
-                print('Failed to authenticate remote with psk hash')
+                logger.warn('Failed to authenticate remote with psk hash')
                 return
             props: Dict[bytes, bytes] = info.properties
             addrs: List[TIfaceAddress] = [
@@ -206,11 +207,13 @@ class WGServiceListener(ServiceListener):
             pubkey = props.get(b'pubkey', b'').decode('utf-8')
             hostname = props.get(b'hostname', b'').decode('utf-8')
             if not internal_addr or not pubkey:
-                print('Service does not have requisite properties')
+                logger.warn('Service does not have requisite properties')
                 return
-            if internal_addr == self.my_address:
+            if internal_addr.ip == self.my_address.ip:
+                logger.warn('Service has same internal ip address')
                 return
-            if not internal_addr.network.subnet_of(self.my_prefix):
+            if internal_addr.ip not in self.my_prefix:
+                logger.warn('Service is not a subnet of our prefix')
                 return
             logger.info(
                 'Found remote. name "%s" pubkey "%s" addrs %s port %d',
