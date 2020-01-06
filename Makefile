@@ -12,6 +12,9 @@ wheel: $(whl)
 
 deb: $(deb)
 
+tests:
+	python3 -m unittest discover -s tests
+
 $(whl): $(src)
 	python3 ./setup.py bdist_wheel -d .
 
@@ -40,4 +43,4 @@ build/pkg: $(whl)
 	python3 -m pip install -r requirements.txt --target $@ --upgrade
 	python3 -m pip install $(whl) --target $@ --upgrade
 
-.PHONY: install build clean deb
+.PHONY: install build clean deb tests
