@@ -1,60 +1,47 @@
 #!/usr/bin/env python3
-import sys
 import unittest
-from unittest.mock import patch
-import subprocess
-
-sys.path.append('../zerowire')
+from unittest.mock import Mock
+from util import ProcTest
 
 from zerowire import wg
 
-class Test_wg_proc(unittest.TestCase):
-    @patch('subprocess.run')
-    def test_wg_proc_basic(self, run) -> None:
-        res = wg.wg_proc(['test'])
 
-        run.assert_called_once_with(['wg', 'test'], check=True, input=None, stdout=subprocess.PIPE, text=True)
-        assert res == run.return_value.stdout.strip()
+class Test_WGProc(ProcTest, unittest.TestCase):
 
-    @patch('subprocess.run')
-    def test_wg_proc_with_input(self, run) -> None:
-        res = wg.wg_proc(['test'], input='Yay my awesome input')
-
-        run.assert_called_once_with(['wg', 'test'], check=True, input='Yay my awesome input', stdout=subprocess.PIPE, text=True)
-        assert res == run.return_value.stdout.strip()
-
-
-class Test_WGProc(unittest.TestCase):
-    @patch('zerowire.wg.wg_proc')
-    def test_basic(self, wg_proc):
+    def test_basic(self) -> None:
         res = wg.WGProc('my', 'args').run()
 
-        wg_proc.assert_called_once_with(['my', 'args'], input=None)
-        assert res == wg_proc.return_value
+        subprocess_res = self.assertSubprocess(
+            ['my', 'args'])
 
-    @patch('zerowire.wg.wg_proc')
-    def test_args(self, wg_proc):
+        self.assertEqual(res, subprocess_res)
+
+    def test_args(self) -> None:
         res = (
             wg.WGProc('yay')
             .args(['these', 'args'], 'will', ['be', 'flattened'])
             .run())
 
-        wg_proc.assert_called_once_with(
-            ['yay', 'these', 'args', 'will', 'be', 'flattened'],
-            input=None)
-        assert res == wg_proc.return_value
+        subprocess_res = self.assertSubprocess(
+            ['yay', 'these', 'args', 'will', 'be', 'flattened'])
+        self.assertEqual(res, subprocess_res)
 
-    @patch('zerowire.wg.wg_proc')
-    def test_input(self, wg_proc):
+    def test_input(self) -> None:
         res = (
             wg.WGProc('yay')
             .input('yay inputz')
             .run())
 
-        wg_proc.assert_called_once_with(
-            ['yay'],
-            input='yay inputz')
-        assert res == wg_proc.return_value
+        subprocess_res = self.assertSubprocess(
+            ['yay'], 'yay inputz')
+        self.assertEqual(res, subprocess_res)
+
+    def test_stdout_strip(self) -> None:
+        mock = Mock()
+        self.setRunSideEffects(mock)
+        res = wg.WGProc().run()
+
+        self.assertEqual(res, mock.stdout.strip())
 
 
 if __name__ == '__main__':

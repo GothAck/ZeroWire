@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-import sys
 import unittest
-from unittest.mock import patch, call
+from unittest.mock import patch
 import io
 import ipaddress
 
-sys.path.append('../zerowire')
+from util import ProcTest
 
 from zerowire import config
 
@@ -63,87 +62,106 @@ interfaces:
 """
 
 
-class Test_Config(unittest.TestCase):
+class Test_Config(ProcTest, unittest.TestCase):
     def test_load_config_BASIC(self) -> None:
         file = io.StringIO(BASIC_CONFIG)
 
         res = config.Config.load(file)
 
-        assert isinstance(res, config.Config)
-        assert len(res) == 1
-        assert 'wg-test' in res
+        self.assertIsInstance(res, config.Config)
+        self.assertEqual(len(res), 1)
+        self.assertIn('wg-test', res)
         iface = res['wg-test']
-        assert isinstance(iface, config.IfaceConfig)
-        assert iface.name == 'wg-test'
-        assert iface.addr.compressed == 'fd01:203:405:607:809:a0b:d0e:f10/64'
-        assert iface.psk == '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8='
-        assert iface.privkey == 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc='
-        assert iface.pubkey == 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI='
-        assert iface.port is None
-        assert iface.services is None
+        self.assertIsInstance(iface, config.IfaceConfig)
+        self.assertEqual(
+            iface.name, 'wg-test')
+        self.assertEqual(
+            iface.addr.compressed, 'fd01:203:405:607:809:a0b:d0e:f10/64')
+        self.assertEqual(
+            iface.psk, '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=')
+        self.assertEqual(
+            iface.privkey, 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=')
+        self.assertEqual(
+            iface.pubkey, 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=')
+        self.assertIsNone(iface.port)
+        self.assertIsNone(iface.services)
 
     def test_load_config_PORT(self) -> None:
         file = io.StringIO(PORT_CONFIG)
 
         res = config.Config.load(file)
 
-        assert isinstance(res, config.Config)
-        assert len(res) == 1
-        assert 'wg-test' in res
+        self.assertIsInstance(res, config.Config)
+        self.assertEqual(len(res), 1)
+        self.assertIn('wg-test', res)
         iface = res['wg-test']
-        assert isinstance(iface, config.IfaceConfig)
-        assert iface.name == 'wg-test'
-        assert iface.addr.compressed == 'fd01:203:405:607:809:a0b:d0e:f10/64'
-        assert iface.psk == '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8='
-        assert iface.privkey == 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc='
-        assert iface.pubkey == 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI='
-        assert iface.port == 19920
-        assert iface.services is None
+        self.assertIsInstance(iface, config.IfaceConfig)
+        self.assertEqual(iface.name, 'wg-test')
+        self.assertEqual(
+            iface.addr.compressed, 'fd01:203:405:607:809:a0b:d0e:f10/64')
+        self.assertEqual(
+            iface.psk, '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=')
+        self.assertEqual(
+            iface.privkey, 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=')
+        self.assertEqual(
+            iface.pubkey, 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=')
+        self.assertEqual(iface.port, 19920)
+        self.assertIsNone(iface.services)
 
     def test_load_config_SERVICES(self) -> None:
         file = io.StringIO(SERVICES_CONFIG)
 
         res = config.Config.load(file)
 
-        assert isinstance(res, config.Config)
-        assert len(res) == 1
-        assert 'wg-test' in res
+        self.assertIsInstance(res, config.Config)
+        self.assertEqual(len(res), 1)
+        self.assertIn('wg-test', res)
         iface = res['wg-test']
-        assert isinstance(iface, config.IfaceConfig)
-        assert iface.name == 'wg-test'
-        assert iface.addr.compressed == 'fd01:203:405:607:809:a0b:d0e:f10/64'
-        assert iface.psk == '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8='
-        assert iface.privkey == 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc='
-        assert iface.pubkey == 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI='
-        assert iface.port == 19920
-        assert isinstance(iface.services, list)
-        for service in iface.services:
-            assert isinstance(service, config.ServiceConfig)
+        self.assertIsInstance(iface, config.IfaceConfig)
+        self.assertEqual(iface.name, 'wg-test')
+        self.assertEqual(
+            iface.addr.compressed, 'fd01:203:405:607:809:a0b:d0e:f10/64')
+        self.assertEqual(
+            iface.psk, '1j75n1Zcwp9tUMuFH5H6C5Jn0PVjk66UXqSbY/OTjb8=')
+        self.assertEqual(
+            iface.privkey, 'aKwoU/4zwKzc89RLS1/ioOGHqqcSQPgTeMNfiPMrbGc=')
+        self.assertEqual(
+            iface.pubkey, 'h+LAI3+61Va12APH9GXLEy7NZdCLAPIb/ndrj9rsFBI=')
+        self.assertEqual(iface.port, 19920)
+        self.assertIsInstance(iface.services, list)
+
+        for service in iface.services or []:
+            self.assertIsInstance(service, config.ServiceConfig)
 
 
-class Test_IfaceConfig_BASIC(unittest.TestCase):
+class Test_IfaceConfig_BASIC(ProcTest, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         file = io.StringIO(BASIC_CONFIG)
         self.ifconfig = config.Config.load(file)['wg-test']
+        self.__IPDB = patch('zerowire.config.IPDB')
+        self.IPDB = self.__IPDB.start()
+
+    def tearDown(self) -> None:
+        super().tearDown()
+        self.__IPDB.stop()
 
     def test_prefix(self) -> None:
         prefix = self.ifconfig.prefix
 
-        assert isinstance(prefix, ipaddress.IPv6Network)
-        assert self.ifconfig.addr in prefix
+        self.assertIsInstance(prefix, ipaddress.IPv6Network)
+        self.assertIn(self.ifconfig.addr, prefix)
 
-    @patch('zerowire.wg.wg_proc')
-    @patch('zerowire.config.IPDB')
-    def test_configure_iface_exists(self, IPDB, wg_proc) -> None:
-        ctx = IPDB.return_value.__enter__.return_value
+    def test_configure_iface_exists(self) -> None:
+        ctx = self.IPDB.return_value.__enter__.return_value
         ctx.interfaces.__contains__.return_value = True
         ctxiface = ctx.interfaces.__getitem__.return_value
 
-        wg_proc.side_effect = ['', 'test\trar\t1234\tnone']
+        self.setRunSideEffects('', 'test\trar\t1234\tnone')
 
         self.ifconfig.configure()
 
-        IPDB.assert_called_once_with()
+        self.IPDB.assert_called_once_with()
 
         # Remove current iface
         ctx.interfaces.__contains__.assert_called_once_with('wg-test')
@@ -151,30 +169,28 @@ class Test_IfaceConfig_BASIC(unittest.TestCase):
         ctxiface.remove.assert_called_once_with()
         ctxiface.remove.return_value.commit.assert_called_once_with()
 
-        wg_proc.assert_has_calls([
-            call([
+        self.assertSubprocesses(
+            ([
                 'set',
                 'wg-test',
                 'private-key',
                 '/dev/stdin',
-            ], input=self.ifconfig.privkey),
-            call(['show', 'wg-test', 'dump'], input=None),
-        ])
+            ], self.ifconfig.privkey),
+            (['show', 'wg-test', 'dump'], None)
+        )
 
-        assert self.ifconfig.port == 1234
+        self.assertEqual(self.ifconfig.port, 1234)
 
-    @patch('zerowire.wg.wg_proc')
-    @patch('zerowire.config.IPDB')
-    def test_configure_iface_not_exists(self, IPDB, wg_proc) -> None:
-        ctx = IPDB.return_value.__enter__.return_value
+    def test_configure_iface_not_exists(self) -> None:
+        ctx = self.IPDB.return_value.__enter__.return_value
         ctx.interfaces.__contains__.return_value = False
         ctxiface = ctx.interfaces.__getitem__.return_value
 
-        wg_proc.side_effect = ['', 'test\trar\t1234\tnone']
+        self.setRunSideEffects('', 'test\trar\t1234\tnone')
 
         self.ifconfig.configure()
 
-        IPDB.assert_called_once_with()
+        self.IPDB.assert_called_once_with()
 
         # Remove current iface
         ctx.interfaces.__contains__.assert_called_once_with('wg-test')
@@ -182,42 +198,47 @@ class Test_IfaceConfig_BASIC(unittest.TestCase):
         ctxiface.remove.assert_not_called()
         ctxiface.remove.return_value.commit.assert_not_called()
 
-        wg_proc.assert_has_calls([
-            call([
+        self.assertSubprocesses(
+            ([
                 'set',
                 'wg-test',
                 'private-key',
                 '/dev/stdin',
-            ], input=self.ifconfig.privkey),
-            call(['show', 'wg-test', 'dump'], input=None),
-        ])
+            ], self.ifconfig.privkey),
+            (['show', 'wg-test', 'dump'], None),
+        )
 
-        assert self.ifconfig.port == 1234
+        self.assertEqual(self.ifconfig.port, 1234)
 
 
-class Test_IfaceConfig_PORT(unittest.TestCase):
+class Test_IfaceConfig_PORT(ProcTest, unittest.TestCase):
     def setUp(self) -> None:
+        super().setUp()
         file = io.StringIO(PORT_CONFIG)
         self.ifconfig = config.Config.load(file)['wg-test']
+        self.__IPDB = patch('zerowire.config.IPDB')
+        self.IPDB = self.__IPDB.start()
+
+    def tearDown(self) -> None:
+        super().tearDown()
+        self.__IPDB.stop()
 
     def test_prefix(self) -> None:
         prefix = self.ifconfig.prefix
 
-        assert isinstance(prefix, ipaddress.IPv6Network)
-        assert self.ifconfig.addr in prefix
+        self.assertIsInstance(prefix, ipaddress.IPv6Network)
+        self.assertIn(self.ifconfig.addr, prefix)
 
-    @patch('zerowire.wg.wg_proc')
-    @patch('zerowire.config.IPDB')
-    def test_configure_iface_exists(self, IPDB, wg_proc) -> None:
-        ctx = IPDB.return_value.__enter__.return_value
+    def test_configure_iface_exists(self) -> None:
+        ctx = self.IPDB.return_value.__enter__.return_value
         ctx.interfaces.__contains__.return_value = True
         ctxiface = ctx.interfaces.__getitem__.return_value
 
-        wg_proc.side_effect = ['', 'test\trar\t1234\tnone']
+        self.setRunSideEffects('', 'test\trar\t1234\tnone')
 
         self.ifconfig.configure()
 
-        IPDB.assert_called_once_with()
+        self.IPDB.assert_called_once_with()
 
         # Remove current iface
         ctx.interfaces.__contains__.assert_called_once_with('wg-test')
@@ -225,31 +246,30 @@ class Test_IfaceConfig_PORT(unittest.TestCase):
         ctxiface.remove.assert_called_once_with()
         ctxiface.remove.return_value.commit.assert_called_once_with()
 
-        wg_proc.assert_has_calls([
-            call([
+        self.assertSubprocess(
+            [
                 'set',
                 'wg-test',
                 'listen-port',
                 '19920',
                 'private-key',
                 '/dev/stdin',
-            ], input=self.ifconfig.privkey),
-        ])
+            ],
+            input=self.ifconfig.privkey
+        )
 
-        assert self.ifconfig.port == 19920
+        self.assertEqual(self.ifconfig.port, 19920)
 
-    @patch('zerowire.wg.wg_proc')
-    @patch('zerowire.config.IPDB')
-    def test_configure_iface_not_exists(self, IPDB, wg_proc) -> None:
-        ctx = IPDB.return_value.__enter__.return_value
+    def test_configure_iface_not_exists(self) -> None:
+        ctx = self.IPDB.return_value.__enter__.return_value
         ctx.interfaces.__contains__.return_value = False
         ctxiface = ctx.interfaces.__getitem__.return_value
 
-        wg_proc.side_effect = ['', 'test\trar\t1234\tnone']
+        self.setRunSideEffects('', 'test\trar\t1234\tnone')
 
         self.ifconfig.configure()
 
-        IPDB.assert_called_once_with()
+        self.IPDB.assert_called_once_with()
 
         # Remove current iface
         ctx.interfaces.__contains__.assert_called_once_with('wg-test')
@@ -257,18 +277,18 @@ class Test_IfaceConfig_PORT(unittest.TestCase):
         ctxiface.remove.assert_not_called()
         ctxiface.remove.return_value.commit.assert_not_called()
 
-        wg_proc.assert_has_calls([
-            call([
+        self.assertSubprocesses(
+            ([
                 'set',
                 'wg-test',
                 'listen-port',
                 '19920',
                 'private-key',
                 '/dev/stdin'
-            ], input=self.ifconfig.privkey),
-        ])
+            ], self.ifconfig.privkey)
+        )
 
-        assert self.ifconfig.port == 19920
+        self.assertEqual(self.ifconfig.port, 19920)
 
 
 if __name__ == '__main__':
