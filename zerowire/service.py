@@ -13,7 +13,6 @@ from typing import (
     TYPE_CHECKING
 )
 
-import logging
 import weakref
 import asyncio
 from dataclasses import dataclass
@@ -22,11 +21,11 @@ import json
 
 from .config import Config, ServiceHandlerConfig
 from .dns import dns_query_timeout, DNSRecord, DNSLabel
+from .classlogger import ClassLogger
 
 if TYPE_CHECKING:
     from .wgzero import WGPeer
 
-logger = logging.getLogger(__name__)
 
 TKey = TypeVar('TKey')
 TVar = TypeVar('TVar')
@@ -43,7 +42,7 @@ async def async_pair(
 
 
 @dataclass
-class ServiceData:
+class ServiceData(ClassLogger):
     type: str
     name: str
     priority: int
@@ -99,22 +98,22 @@ class ServiceData:
         self,
     ) -> Optional[asyncio.subprocess.Process]:
         if self.handler:
-            logger.info('Running handler start %s', self.handler.start)
+            self.logger.info('Running handler start %s', self.handler.start)
             return await asyncio.create_subprocess_shell(
                 self.handler.start,
                 env=self.get_env())
-        logger.info('No handler, start')
+        self.logger.info('No handler, start')
         return None
 
     async def run_stop(
         self,
     ) -> Optional[asyncio.subprocess.Process]:
         if self.handler:
-            logger.info('Running handler stop %s', self.handler.stop)
+            self.logger.info('Running handler stop %s', self.handler.stop)
             return await asyncio.create_subprocess_shell(
                 self.handler.stop,
                 env=self.get_env())
-        logger.info('No handler, stop')
+        self.logger.info('No handler, stop')
         return None
 
     def get_env(self) -> Dict[str, str]:
@@ -147,16 +146,17 @@ else:
     MappingBase = Mapping
 
 
-class ServiceDiscovery(MappingBase):
+class ServiceDiscovery(MappingBase, ClassLogger):
     task: Optional[asyncio.Task[None]]
 
     def __init__(self, peer: WGPeer, config: Config):
-        logger.debug('ServiceDiscovery.__init__ %s', peer.name)
+        self._setLoggerName(peer)
         self.peer = peer
         self.config = config
         self.service_handlers = config.service_handlers
         self.services: Dict[str, ServiceData] = {}
         self.task = None
+        self.logger.debug('ServiceDiscovery.__init__ %s', peer.name)
         # weakref.finalize(self, lambda services: , self.services)
 
     # def __del__(self) -> None:
@@ -167,11 +167,11 @@ class ServiceDiscovery(MappingBase):
     #             loop.call_soon_threadsafe(handler.run_stop, service)
 
     def __start(self) -> None:
-        logger.debug('__start %s', self.peer.name)
+        self.logger.debug('__start %s', self.peer.name)
         self.task = asyncio.create_task(self.discover())
 
     def start(self) -> None:
-        logger.debug('start %s', self.peer.name)
+        self.logger.debug('start %s', self.peer.name)
         self.peer.wg_iface.loop.call_soon_threadsafe(self.__start)
 
     def stop(self) -> None:
@@ -197,7 +197,7 @@ class ServiceDiscovery(MappingBase):
             )
         )
         if not root.rr:
-            logger.info('No RR returned, skipping')
+            self.logger.info('No RR returned, skipping')
             return []
         return [
             DNSLabel(str(type_ptr.rdata)).stripSuffix(peer.hostname)
@@ -249,7 +249,7 @@ class ServiceDiscovery(MappingBase):
     async def discover_peer(self, peer: WGPeer) -> None:
         subprocesses: Dict[ServiceData, asyncio.subprocess.Process] = {}
         try:
-            logger.info('Looking up services for peer %r', peer)
+            self.logger.info('Looking up services for peer %r', peer)
 
             types = [
                 type
@@ -269,7 +269,7 @@ class ServiceDiscovery(MappingBase):
                     else:
                         self.services[service.name] = service
         except Exception as e:
-            logger.exception(e)
+            self.logger.exception(e)
             return
         all_results = asyncio.gather(*(
             async_pair(key, wait_terminate_process(process))
@@ -278,7 +278,7 @@ class ServiceDiscovery(MappingBase):
         for service, returncode in all_results:
             print(service.name)
             if returncode is None or returncode != 0:
-                logger.error(
+                self.logger.error(
                     'Subprocess for service %s failed with returncode %i',
                     service.name,
                     returncode)
@@ -287,6 +287,6 @@ class ServiceDiscovery(MappingBase):
 
     async def discover(self) -> None:
         while True:
-            logger.debug('Run peer detection for peer %s', self.peer.name)
+            self.logger.debug('Run peer detection for peer %s', self.peer.name)
             await self.discover_peer(self.peer)
             await asyncio.sleep(60)
