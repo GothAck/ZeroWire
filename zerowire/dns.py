@@ -43,6 +43,10 @@ class DNSClientProtocol(asyncio.DatagramProtocol, ClassLogger):
         self.result = None
         super().__init__()
 
+    @property
+    def _logrepr(self) -> str:
+        return repr(self.query)
+
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         cast(asyncio.DatagramTransport, transport).sendto(self.query.pack())
         self.transport = transport
@@ -135,6 +139,10 @@ class BaseDNSServer(ClassLogger):
         self.port = port
         self.loop = asyncio.get_event_loop()
         self.__records = defaultdict(lambda: defaultdict(list))
+
+    @property
+    def _logrepr(self) -> str:
+        return f'{self.bind}:{self.port}'
 
     async def start(
         self,
