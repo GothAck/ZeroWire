@@ -6,23 +6,10 @@ from typing import (
 )
 
 import subprocess
-import logging
-
-logger = logging.getLogger(__name__)
+from .classlogger import ClassLogger
 
 
-def wg_proc(args: List[str], input: Optional[str] = None) -> str:
-    ret: subprocess.CompletedProcess[str] = subprocess.run(
-        ['wg', *args],
-        stdout=subprocess.PIPE,
-        text=True,
-        input=input,
-        check=True)
-    stdout = ret.stdout
-    return stdout.strip()
-
-
-class WGProc:
+class WGProc(ClassLogger):
     _args: List[str]
     _input: Optional[str] = None
 
@@ -42,4 +29,17 @@ class WGProc:
         return self
 
     def run(self) -> str:
-        return wg_proc(self._args, input=self._input)
+        args = self._args
+        input = self._input
+        self.logger.debug('run %r input %r', args, bool(input))
+        return (
+            subprocess.run(
+                ['wg', *args],
+                stdout=subprocess.PIPE,
+                text=True,
+                input=input,
+                check=True,
+            )
+            .stdout
+            .strip()
+        )
