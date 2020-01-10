@@ -11,45 +11,76 @@ from typing import (
 )
 
 import logging
+from .classlogger import ClassLogger
 
 import ipaddress
-import asyncio
+from asyncio import (
+    AbstractEventLoop,
+    gather,
+    get_event_loop,
+    Task,
+)
+from signal import SIGINT, SIGTERM
+
 
 FORMAT = '[%(levelname)s] %(name)s - %(message)s'
-logger = logging.getLogger('zerowire')
 
 
-async def main() -> None:
-    args = Args.from_docopt()
+class App(ClassLogger):
+    loop: AbstractEventLoop
+    interfaces: List[WGInterface]
+    __stopping: bool = False
 
-    logging.basicConfig(format=FORMAT, level=args.level)
-    config: Config = Config.load(args.config)
-    logger.debug('Config %s', config.__dict__)
+    def __init__(self) -> None:
+        self.loop = get_event_loop()
+        self.interfaces = []
 
-    dns = LocalDNSServer(ipaddress.ip_address('127.122.119.53'), 53)
-    await dns.start()
+        self.args = Args.from_docopt()
 
-    interfaces: List[WGInterface] = []
+        logging.basicConfig(format=FORMAT, level=self.args.level)
+        self.config = Config.load(self.args.config)
+        self.logger.debug('Config %s', self.config.__dict__)
+        self.dns = LocalDNSServer(ipaddress.ip_address('127.122.119.53'), 53)
 
-    for wg_ifname in config:
-        wg_ifconfig = config[wg_ifname]
-        logger.info('Setting up %s', wg_ifname)
-        logger.info(
-            'My Address %s, my prefix %s',
-            wg_ifconfig.addr,
-            wg_ifconfig.prefix,
-        )
+        for wg_ifname in self.config:
+            wg_ifconfig = self.config[wg_ifname]
+            wg_ifconfig.configure()
+            self.interfaces.append(
+                WGInterface(wg_ifname, wg_ifconfig, self.dns))
 
-        wg_ifconfig.configure()
-        iface = WGInterface(wg_ifname, wg_ifconfig, dns)
-        await iface.start()
-        interfaces.append(iface)
-    try:
-        while True:
-            await asyncio.sleep(60)
-    finally:
-        for wgiface in interfaces:
+        for sig in {SIGINT, SIGTERM}:
+            self.loop.add_signal_handler(sig, self.stop, sig)
+
+    async def __stop(self, sig: int) -> None:
+        self.logger.info('Exiting on signal %d', sig)
+        for wgiface in self.interfaces:
             wgiface.close()
 
+    def stop(self, sig: int) -> None:
+        if self.__stopping:
+            return
+        self.__stopping = True
+
+        def stop(task: Task[None]) -> None:
+            self.logger.info('Stopping event loop')
+            self.loop.stop()
+        self.loop.create_task(self.__stop(sig)).add_done_callback(stop)
+
+    async def init_task(self) -> None:
+        await self.dns.start()
+        await gather(*(
+            iface.start()
+            for iface in self.interfaces
+        ))
+        self.logger.info('Init done')
+
+    def run(self) -> None:
+        try:
+            self.loop.create_task(self.init_task())
+            self.loop.run_forever()
+        finally:
+            self.loop.close()
+
+
 if __name__.endswith("__main__"):
-    asyncio.run(main())
+    App().run()
