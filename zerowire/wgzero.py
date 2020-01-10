@@ -7,7 +7,6 @@ import os
 import base64
 import ipaddress
 from threading import Lock
-import logging
 
 from zeroconf import ServiceBrowser, Zeroconf, ServiceInfo, ServiceListener
 from pyroute2 import IPRoute
@@ -18,13 +17,13 @@ from .config import IfaceConfig, MACHINE_ID, HOSTNAME
 from .wg import WGProc
 from .types import TAddress, TIfaceAddress
 from .dns import LocalDNSServer, InterfaceDNSServer
+from .classlogger import ClassLogger
 
-logger = logging.getLogger(__name__)
 
 WG_TYPE = "_wireguard._udp.local."
 
 
-class WGServiceInfo(ServiceInfo):
+class WGServiceInfo(ServiceInfo, ClassLogger):
     salt: bytes
     auth: bytes
 
@@ -39,7 +38,6 @@ class WGServiceInfo(ServiceInfo):
         salt = base64.b64encode(os.urandom(32))
 
         dnshost = f'{machineid}.{WG_TYPE}'
-        logger.debug('dnshost %s', dnshost)
         addr = config.addr.ip.compressed.encode('utf-8')
         port = config.port
         hostnameenc = hostname.encode('utf-8')
@@ -70,7 +68,8 @@ class WGServiceInfo(ServiceInfo):
                 'auth': auth,
             }
         )
-
+        obj._setLoggerName(machineid)
+        obj.logger.debug('dnshost %s', dnshost)
         obj.salt = salt
         obj.auth = auth
         return obj
@@ -99,8 +98,9 @@ class WGServiceInfo(ServiceInfo):
         return res == auth
 
 
-class WGZeroconf:
+class WGZeroconf(ClassLogger):
     def __init__(self, ifname: str, wg_iface: WGInterface):
+        self._setLoggerName(ifname)
         self.ifname = ifname
         self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
         self.wg_iface = wg_iface
@@ -112,9 +112,10 @@ class WGZeroconf:
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
         digest.update(MACHINE_ID.encode('utf-8'))
         digest.update(ifname.encode('utf-8'))
+        self.hostname = digest.finalize()[:16].hex()
 
         self.service: WGServiceInfo = WGServiceInfo.new(
-            digest.finalize()[:16].hex(),
+            self.hostname,
             addresses=[addr.packed for addr in self.addresses],
             hostname=HOSTNAME,
             config=wg_iface.config,
@@ -134,8 +135,9 @@ class WGZeroconf:
         self.zeroconf.close()
 
 
-class WGInterface:
+class WGInterface(ClassLogger):
     def __init__(self, ifname: str, config: IfaceConfig, dns: LocalDNSServer):
+        self._setLoggerName(ifname)
         self.ifname = ifname
         self.ifindex: int = IPRoute().link_lookup(ifname=ifname)[0]
         self.global_dns = dns
@@ -144,7 +146,7 @@ class WGInterface:
         if config.services:
             for service in config.services:
                 self.dns.add_service(service)
-            logger.info('Services %r', self.dns.get_all_records())
+            self.logger.info('Services %r', self.dns.get_all_records())
 
         self.zeroconfs = [
             WGZeroconf(name, self)
@@ -165,7 +167,7 @@ class WGInterface:
             wg_zero.close()
 
 
-class WGServiceListener(ServiceListener):
+class WGServiceListener(ServiceListener, ClassLogger):
     peers: Dict[str, TIfaceAddress]
 
     def __init__(self, wg_zero: WGZeroconf):
@@ -176,6 +178,7 @@ class WGServiceListener(ServiceListener):
         self.psk = wg_zero.wg_iface.config.psk
         self.peers = {}
         self.lock = Lock()
+        self._setLoggerName(parent=self.wg_zero)
 
     def remove_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
         with self.lock:
@@ -185,10 +188,11 @@ class WGServiceListener(ServiceListener):
         pass
 
     def add_service(self, zeroconf: Zeroconf, type: str, name: str) -> None:
+        logger = self.logger.getChild(name.split('.', 2)[0])
         with self.lock:
             info = zeroconf.get_service_info(type, name)
             logger.debug(
-                'WGServiceListener add_service %s %s %r', type, name, info)
+                'WGServiceListener add_service %s', type)
             if not info:
                 logger.warn('Missing info')
                 return

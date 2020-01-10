@@ -12,14 +12,12 @@ from dataclasses import dataclass
 from abc import abstractmethod
 import socket
 import ipaddress
-import logging
 from typeguard import check_type
 import yaml
 from pyroute2 import IPDB
 from .types import TIfaceAddress, TNetwork
 from .wg import WGProc
-
-logger = logging.getLogger(__name__)
+from .classlogger import ClassLogger
 
 HOSTNAME = socket.gethostname()
 with open('/etc/machine-id', 'rb') as f:
@@ -52,7 +50,7 @@ class ServiceConfig(ConfigBase):
 
 
 @dataclass
-class IfaceConfig(ConfigBase):
+class IfaceConfig(ConfigBase, ClassLogger):
     name: str
     addr: TIfaceAddress
     privkey: str
@@ -98,7 +96,7 @@ class IfaceConfig(ConfigBase):
             .run())
         if self.port is None:
             port = int(WGProc('show', self.name, 'dump').run().split('\t')[2])
-            logger.info('Dynamic port %d', port)
+            self.logger.info('Dynamic port %d', port)
             self.port = port
 
 

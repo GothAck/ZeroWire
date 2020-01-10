@@ -6,12 +6,10 @@ from typing import (
 )
 
 import subprocess
-import logging
-
-logger = logging.getLogger(__name__)
+from .classlogger import ClassLogger
 
 
-class WGProc:
+class WGProc(ClassLogger):
     _args: List[str]
     _input: Optional[str] = None
 
@@ -33,7 +31,7 @@ class WGProc:
     def run(self) -> str:
         args = self._args
         input = self._input
-        logger.debug('run %r input %r', args, bool(input))
+        self.logger.debug('run %r input %r', args, bool(input))
         return (
             subprocess.run(
                 ['wg', *args],

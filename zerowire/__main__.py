@@ -15,9 +15,8 @@ import logging
 import ipaddress
 import asyncio
 
-FORMAT = '[%(levelname)s] %(message)s'
-
-logger = logging.getLogger(__name__)
+FORMAT = '[%(levelname)s] %(name)s - %(message)s'
+logger = logging.getLogger('zerowire')
 
 
 async def main() -> None:

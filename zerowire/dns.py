@@ -23,6 +23,8 @@ import dbus
 import dnslib
 from dnslib import DNSRecord, DNSLabel, QTYPE, RCODE, RD
 
+from .classlogger import ClassLogger
+
 if TYPE_CHECKING:
     from .wgzero import WGInterface
 
@@ -32,7 +34,7 @@ TSource = Tuple[TAddress, int]
 TStrOrLabel = Union[str, DNSLabel]
 
 
-class DNSClientProtocol(asyncio.DatagramProtocol):
+class DNSClientProtocol(asyncio.DatagramProtocol, ClassLogger):
     result: Optional[DNSRecord]
 
     def __init__(self, query: DNSRecord, future: asyncio.Future[DNSRecord]):
@@ -77,11 +79,12 @@ async def dns_query(host: TAddress, port: int, query: DNSRecord) -> DNSRecord:
         transport.close()
 
 
-class DNSServerProtocol(asyncio.DatagramProtocol):
+class DNSServerProtocol(asyncio.DatagramProtocol, ClassLogger):
     transport: asyncio.DatagramTransport
 
     def __init__(self, server: BaseDNSServer) -> None:
         self.server = server
+        self._setLoggerName(parent=server)
         super().__init__()
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
@@ -105,19 +108,20 @@ class DNSServerProtocol(asyncio.DatagramProtocol):
         try:
             reply = await self.server.handle_query(query, source)
         except Exception as e:
-            logger.exception(e)
+            self.logger.exception(e)
             reply = query.reply()
             reply.header.set_rcode(RCODE.SERVFAIL)
-        logger.debug('Reply %r to %r', reply, src)
+        self.logger.debug('Reply %r to %r', reply, src)
         if reply is not None:
             self.transport.sendto(reply.pack(), src)
-        logger.debug('Done')
+        self.logger.debug('Done')
 
 
-class BaseDNSServer:
+class BaseDNSServer(ClassLogger):
     __records: Dict[DNSLabel, Dict[QTYPE, List[RD]]]
 
     def __init__(self, bind: TAddress, port: int):
+        self._setLoggerName(f'{bind}:{port}')
         self.bind = bind
         self.port = port
         self.loop = asyncio.get_event_loop()
@@ -221,11 +225,11 @@ class LocalDNSServer(BaseDNSServer):
             qname = question.qname
             qtype = question.qtype
             self.validate_query_label(qname)
-            logger.debug('Question %r %r', qname, QTYPE[qtype])
+            self.logger.debug('Question %r %r', qname, QTYPE[qtype])
             if len(qname.label) > 2:
                 remote_qname = str(DNSLabel(qname.label[-2:]))
                 remote_records = self.get_addr_records(remote_qname)
-                logger.debug('Remote question %r', question.qname)
+                self.logger.debug('Remote question %r', question.qname)
                 if remote_records:
                     q = DNSRecord()
                     q.add_question(question)
@@ -243,7 +247,7 @@ class LocalDNSServer(BaseDNSServer):
             if not self.has_name(qname):
                 nxdomain = True
             records = self.get_records(qname, qtype)
-            logger.debug('Record %r', records)
+            self.logger.debug('Record %r', records)
             for record in records:
                 reply.add_answer(dnslib.RR(
                     rname=qname,
@@ -251,29 +255,29 @@ class LocalDNSServer(BaseDNSServer):
                     rdata=record,
                 ))
         if queries:
-            logger.debug('Awaiting gather')
+            self.logger.debug('Awaiting gather')
             try:
                 answers = await asyncio.gather(
                     *queries, return_exceptions=True)
             except Exception as e:
-                logger.error(e)
+                self.logger.error(e)
             else:
-                logger.debug('gather complete %r', answers)
+                self.logger.debug('gather complete %r', answers)
                 for answer in answers:
-                    logger.debug('answer %r', answer)
+                    self.logger.debug('answer %r', answer)
                     if isinstance(answer, Exception):
-                        logger.exception(answer)
+                        self.logger.exception(answer)
                     else:
                         reply.add_answer(*answer.rr)
 
         if nxdomain:
-            logger.debug('No answers')
+            self.logger.debug('No answers')
             reply.header.set_rcode(RCODE.NXDOMAIN)
 
         return reply
 
     def add_to_resolved(self, iface: WGInterface) -> None:
-        logger.debug('ifindex %r', iface.ifindex)
+        self.logger.debug('ifindex %r', iface.ifindex)
         bus = dbus.SystemBus()
         dbus_proxy = bus.get_object(
             'org.freedesktop.resolve1', '/org/freedesktop/resolve1')
@@ -319,7 +323,7 @@ class InterfaceDNSServer(BaseDNSServer):
             else:
                 prop += '=' + str(value)
             if len(prop) > 255:
-                logger.error('Property too large to add to txt record %s', key)
+                self.logger.error('Property too large to add to txt record %s', key)
                 continue
             props_list.append(prop)
 
@@ -362,7 +366,7 @@ class InterfaceDNSServer(BaseDNSServer):
                 raise Exception('Request for non local domain.')
             qname = orig_qname.stripSuffix(self.hostname)
             qtype = question.qtype
-            logger.debug('Question %r %r', qname, QTYPE[qtype])
+            self.logger.debug('Question %r %r', qname, QTYPE[qtype])
 
             records = self.get_records(qname, qtype)
             for record in records:
@@ -374,7 +378,7 @@ class InterfaceDNSServer(BaseDNSServer):
                 gave_answers = True
 
         if not gave_answers:
-            logger.debug('No answers')
+            self.logger.debug('No answers')
             reply.header.set_rcode(RCODE.NXDOMAIN)
 
         return reply
